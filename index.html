@@ -2332,7 +2332,13 @@ function drawField(){
     if (st.drain){ c.fillStyle = BLUE; c.fillRect(wx + Bw, gy - 8, 10, 8); }
     if (st.phi > 30){ c.fillStyle = 'rgba(220,220,220,.25)'; for (let i=0;i<60;i++) c.fillRect(wx + Bw + (i*37)%(w - wx - Bw), top + 6 + (i*17)%(gy - top - 8), 2, 2); }
     for (let i=0;i<Math.round(st.q/10);i++) arrow(wx + Bw + 20 + i*24, top - 14, wx + Bw + 20 + i*24, top + 2, RED, 2);
-    T(`H = ${st.H} m`, 6, (top+gy)/2); T(`B = ${st.B.toFixed(1)} m`, wx - 6, gy + 16); break; }
+    // 치수선: H는 벽 왼쪽, B는 저판 아래
+    const hx = wx - 10, by = gy + 13; c.strokeStyle = DIM; c.lineWidth = 1; c.beginPath();
+    c.moveTo(hx-4, top); c.lineTo(wx, top); c.moveTo(hx-4, gy); c.lineTo(wx, gy);
+    c.moveTo(wx, gy+2); c.lineTo(wx, by+4); c.moveTo(wx+Bw, gy+2); c.lineTo(wx+Bw, by+4); c.stroke();
+    arrow(hx, (top+gy)/2, hx, top, DIM, 1); arrow(hx, (top+gy)/2, hx, gy, DIM, 1);
+    arrow(wx+Bw/2, by, wx, by, DIM, 1); arrow(wx+Bw/2, by, wx+Bw, by, DIM, 1);
+    T(`H = ${st.H} m`, hx - 6, (top+gy)/2 + 4, null, 'right'); T(`B = ${st.B.toFixed(1)} m`, wx + Bw/2, by + 14, null, 'center'); break; }
   case 'liq': {
     BT.hero = [0.27, 0.08];
     const top = h*0.08, sc = (h*0.86)/10, x0 = w*0.25, x1 = w*0.75;
