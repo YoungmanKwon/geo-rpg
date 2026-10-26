@@ -428,7 +428,6 @@ const hasPerk = id => P.perks.includes(id);
 /* 파생 능력치 */
 function maxHp(){ const r = jobR(); return 100 + 15*(P.lv-1) + (hasPerk('hp')?40:0) + (eq('head')?.hp||0) + (P.job==='pubcorp' ? 40 + 10*r : 0); }
 function maxBud(){ const r = jobR(); return Math.floor(12 + 1.5*(P.lv-1)) + (hasPerk('vet')?4:0) + (hasPerk('fore')?2:0) + (P.job==='official' ? 4 + r : 0); }
-function surveyCost(){ if (isRes()) return 0; return Math.max(0, 2 - (eq('survey')?.sc||0)); }
 function effMul(tag){ const r = jobR(); return (hasPerk(tag)?1.25:1) * (eq('tool')?.mul||1) * (P.job==='designer' ? 1.15 + 0.05*r : 1); }
 function costOf(sk){ if (sk.trap) return 0; const r = jobR(); return Math.max(1, sk.cost - (hasPerk('cost')?1:0) - (P.job==='contractor' ? (r>=3?2:1) : 0)); }
 function dmgMul(){ const r = jobR(); return (hasPerk('crisis')?0.6:1) * (eq('head')?.dmg||1) * (P.job==='pubcorp' ? 0.7 - 0.05*r : 1); }
@@ -887,6 +886,23 @@ const TRAPS = {
   quay:{name:'준설토 속채움', desc:'속채움을 값싼 준설토로 바꾼다. γc −1.5 kN/m³', apply:s=>{s.gc=+(s.gc-1.5).toFixed(1);}},
   mono:{name:'근입 단축 시공', desc:'항타 시간을 줄인다. 근입 길이 −2 m', apply:s=>{s.L=Math.max(8,+(s.L-2).toFixed(1));}},
   shaft:{name:'감압정 과다 양수', desc:'감압정을 최대로 돌려 공기를 줄인다. 피압수두 −3 m, 바깥 수위 −2 m', apply:s=>{s.hp=Math.max(4,s.hp-3); s.dd+=2; s.set=BOSSES.shaft.sett(s.dd);}}};
+/* 직업 전용 공법: 보스마다 하나. 실무에서 그 직업이 쓰는 수단이다 */
+const JOB_SK = {
+  slope:{job:'researcher',name:'미생물 고결 (MICP)',tag:'improve',cost:3,need:'bore',desc:'요소분해 미생물로 탄산칼슘을 침전시켜 흙 입자를 붙인다 (c′ +6 kPa, φ′ +2°)',apply:(s,m)=>{s.c+=6*m; s.phi=Math.min(40,s.phi+2*m);}},
+  piping:{job:'pubcorp',name:'상류 수문 조절',tag:'drain',cost:2,once:true,need:'perm',desc:'하천 관리기관이 상류 보의 방류량을 줄여 강 수위를 낮춘다 (수위차 −2 m, 1회)',apply:s=>{s.dh=Math.max(1,s.dh-2);}},
+  wall:{job:'designer',name:'역T형 단면 재설계',tag:'geom',cost:3,once:true,need:'sample',desc:'뒷굽을 늘린 역T형으로 다시 설계해 뒷굽 위 흙 무게까지 저항에 쓴다 (저판 폭 +1.2 m, 1회)',apply:s=>{s.B+=1.2;}},
+  liq:{job:'contractor',name:'격자형 심층혼합 (DSM)',tag:'improve',cost:3,need:'spt',desc:'시멘트 기둥을 격자벽으로 이어 모래의 전단변형을 가둔다 (CRR +0.07)',apply:(s,m)=>{s.add+=0.07*m;}},
+  consol:{job:'official',name:'개통일 조정 협의',tag:'geom',cost:2,once:true,need:'plate',desc:'발주기관으로서 관계기관과 협의해 개통일을 2개월 늦춘다 (1회)',apply:s=>{s.dl+=2;}},
+  found:{job:'official',name:'층수 조정 인허가',tag:'geom',cost:2,once:true,need:'plt',desc:'건축 인허가를 변경해 층수를 줄인다. 기초 하중 −20% (1회)',apply:s=>{s.Q=Math.round(s.Q*0.8);}},
+  pile:{job:'researcher',name:'선단 그라우팅',tag:'improve',cost:3,need:'load',desc:'말뚝 끝에 시멘트풀을 고압 주입해 선단 아래 흙을 미리 다진다 (선단지지 qb +1500 kPa)',apply:(s,m)=>{s.qb+=Math.round(1500*m);}},
+  exc:{job:'designer',name:'구간 분할 굴착 설계',tag:'geom',cost:3,once:true,need:'plan',desc:'가장자리 흙을 크게 남기고 가운데부터 구간별로 파서 바닥 슬래브를 먼저 친다 (유효 깊이 −3 m, 1회)',apply:s=>{s.berm=Math.min(4.5,s.berm+3);}},
+  tunnel:{job:'pubcorp',name:'차수 그라우팅 링',tag:'improve',cost:3,need:'probe',desc:'터널 둘레에 차수 링을 만들어 물을 막고 지반을 굳힌다 (cu +6 kPa, 지표 침하 −1.5 cm)',apply:(s,m)=>{s.cu+=6*m; s.set=Math.max(0,s.set-1.5*m);}},
+  scour:{job:'official',name:'하천 골재 채취 금지',tag:'geom',cost:2,once:true,need:'bed',desc:'교량 상하류 골재 채취를 금지하고 하상을 복원해 기초 근입을 되살린다 (근입깊이 +1 m, 1회)',apply:s=>{s.Df=+(s.Df+1).toFixed(1);}},
+  rock:{job:'contractor',name:'절리 충전 그라우팅',tag:'improve',cost:3,need:'joint',desc:'열린 절리에 시멘트 그라우트를 채워 넣는다 (절리 점착력 c +10 kPa)',apply:(s,m)=>{s.c+=Math.round(10*m);}},
+  quay:{job:'designer',name:'감압 선반 설계',tag:'geom',cost:3,once:true,need:'back',desc:'케이슨 뒤에 선반(relieving platform)을 달아 상재하중을 받친다. 배면 상재하중 q 절반 (1회)',apply:s=>{s.q=+(s.q*0.5).toFixed(1);}},
+  mono:{job:'pubcorp',name:'강풍 시 출력 제한 운전',tag:'geom',cost:2,once:true,need:'met',desc:'발전 운영사가 강풍 때 블레이드 피치를 조절해 추력을 줄인다 (수평하중 −20%, 1회)',apply:s=>{s.H=Math.round(s.H*0.8);}},
+  shaft:{job:'contractor',name:'지반 동결 공법',tag:'improve',cost:4,once:true,need:'piez',desc:'냉각관으로 바닥 아래 모래를 얼려 물이 통하지 않는 마개를 만든다 (점토 두께 +4 m 효과, 침하 없음, 1회)',apply:s=>{s.plug=+(s.plug+4).toFixed(1);}}};
+for (const k of ORDER){ const j = JOB_SK[k]; BOSSES[k].skills.push(Object.assign({id:'job'}, j)); NEEDS[k].job = j.need; }
 for (const k of ORDER){ const t = TRAPS[k]; BOSSES[k].skills.push({id:'trap', trap:true, once:true, cost:0, gain:3, tag:'cut', name:'💸 ' + t.name, desc:t.desc + ' (예산 +3억)', apply:t.apply}); }
 const SV_TEST = {
   slope:{bore:'ds', piezo:'pump'}, piping:{bore:'gs', perm:'perm'}, wall:{sample:'ds', well:'pump'}, liq:{spt:'spt', well:'pump'},
@@ -1245,10 +1261,25 @@ function updateRank(){
 }
 function examReady(){ if (P.job === 'student') return null; const i = P.rank + 1, lv = rankLvOf(P.job), ex = examOf(P.job); return (i < lv.length && ex[i] && !P.examOK[i] && P.lv >= lv[i]) ? {i, name:ex[i]} : null; }
 const canChangeJob = () => P.job === 'student' && P.lv >= 5;
+const CAREER_TALK = [
+  '{n}, 벌써 레벨 5구나! 이제 진로를 정할 때야. 같은 현장이라도 직업마다 쓰는 무기가 달라.',
+  '🏗️ 시공사는 직접 짓는 사람이야. 심층혼합, 그라우팅, 지반 동결 같은 시공 기술을 쓰고 공사비를 아끼지.',
+  '📐 설계사는 계산으로 이기는 사람이야. 단면을 다시 설계하고 굴착 순서를 바꿔서 같은 돈으로 더 큰 효과를 내.',
+  '🏛️ 공무원은 발주기관이야. 인허가와 일정 협의로 문제 자체를 바꾸고, 예산을 더 끌어오지.',
+  '🏢 공기업은 시설을 운영하는 사람이야. 수문 조절, 발전 제어, 차수 같은 운영 수단과 비상 대응에 강해.',
+  '🔬 연구자는 새 기술을 가져와. 미생물 고결, 선단 그라우팅 같은 신공법과 문헌으로 퀴즈에 강하지.',
+  '현장마다 직업 전용 공법이 하나씩 있어. 직업이 없으면 그 공법은 잠겨 있지. 그리고 직급이 오르면 “대형 수주” 의뢰를 받을 수 있어.',
+  '한 번 정하면 바꿀 수 없으니 잘 골라!'];
+const RANK_PERK = {contractor:r => r >= 3 ? '모든 공법 비용 −2' : '모든 공법 비용 −1', designer:r => `공법 효과 +${15 + 5*r}%`, official:r => `전투 시작 예산 +${4 + r}억`,
+  pubcorp:r => `최대 HP +${40 + 10*r}, 붕괴 피해 −${30 + 5*r}%`, researcher:r => `퀴즈 정답 예산 +${2 + r}억`};
+async function promoScene(){
+  const r = P.rank, J = JOBS[P.job], ex = examReady(), unlock = r >= 1 && r <= 3 ? `<p>🏆 이제 “${rankNeed(r)}” 대형 수주를 받을 수 있다.</p>` : '';
+  await modal(`<h2>🎉 승진! ${J.icon} ${jobTitle()}</h2><p>${P.name}의 현장 경력이 인정되었다.</p><div class="reward"><span>${RANK_PERK[P.job](r)}</span>${isTop() ? `<span>${J.sp} 전투당 2회</span>` : ''}</div>${unlock}${ex ? `<p style="color:var(--gold)">📝 다음 직급은 “${ex.name}”을(를) 통과해야 한다. 메뉴 › 상태·직업에서 응시할 수 있다.</p>` : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>계속</button></div>`);
+}
 async function chooseJob(){
   const ids = ['contractor','designer','official','pubcorp','researcher'];
   const html = `<div class="mhead"><h2>진로 선택</h2><button class="x" aria-label="닫기">✕</button></div><p>토목공학도로서의 시절이 끝났다. 어떤 길을 걸을까? 한 번 정하면 바꿀 수 없다.</p>
-   <div class="cards">${ids.map(j => `<div class="card"><div class="cn">${JOBS[j].icon} ${JOBS[j].name}</div><div class="cd">${JOBS[j].desc}</div><div class="cd" style="flex:0">${ranksOf(j).join(' → ')}</div><div class="cf"><span></span><button class="btn sm" data-j="${j}">이 길로</button></div></div>`).join('')}</div>`;
+   <div class="cards">${ids.map(j => `<div class="card"><div class="cn">${JOBS[j].icon} ${JOBS[j].name}</div><div class="cd">${JOBS[j].desc}</div><div class="cd" style="flex:0">${ranksOf(j).join(' → ')}</div><div class="cd" style="flex:0;color:var(--gold)">전용 공법: ${Object.values(JOB_SK).filter(x => x.job === j).map(x => x.name).join(', ')}</div><div class="cf"><span></span><button class="btn sm" data-j="${j}">이 길로</button></div></div>`).join('')}</div>`;
   return new Promise(res => {
     $('modalBody').innerHTML = html; $('modal').classList.add('wide'); $('modal').classList.remove('hidden');
     $('modalBody').querySelector('.x').onclick = () => { closeModal(); res(false); };
@@ -1343,7 +1374,7 @@ const MAPS = [
 const MW = 24, MH = 15, TS = 16;
 const tile = (x,y) => (y<0||y>=MH||x<0||x>=MW) ? '^' : MAPS[P.map].tiles[y][x];
 const NPCS = {
-  e:{name:'김 과장 (선배)', col:'#2c6fbf', hat:'#f2f2f2', lines:[
+  e:{name:'김 과장 (선배)', col:'#2c6fbf', hat:'#f2f2f2', jl:{contractor:'시공사라고? 현장 반장님들 말씀 잘 들어. 공기를 지키는 게 곧 실력이야.', designer:'설계사가 됐구나. 계산서 한 장이 현장 하나를 살린다는 걸 잊지 마.', official:'공무원이라니! 발주기관 입장에선 일정과 인허가도 훌륭한 대책이지.', pubcorp:'공기업에 들어갔구나. 지어 놓은 시설을 수십 년 지키는 게 네 일이야.', researcher:'대학원에 갔구나! 오늘의 신기술이 내일의 표준 공법이 되지.'}, lines:[
     '어서 와, {n}! 이 일대에 흙과 물이 만든 괴물들이 날뛰고 있어.',
     '전투에서는 공법으로 안전율을 목표까지 끌어올리면 이겨. 괴물의 공격 뒤에 안전율이 1 아래로 떨어지면 붕괴 사고로 체력을 잃어.',
     '비탈 골렘은 북쪽 산에 있어. 바로 쳐들어가도 돼!',
@@ -1368,7 +1399,7 @@ const NPCS = {
     '늪의 군주는 시간이 무기야. 개통일까지 침하를 끝내야 해.',
     'PVD는 샌드매트 없이는 물이 빠질 길이 없어 반쪽짜리야.',
     '성토를 너무 높이 쌓으면 기초가 못 버티고 무너져. 지지력은 대략 5.14 cu, 여기선 100 kPa 남짓이지.']},
-  p:{name:'정 기술사 (구조)', col:'#4a5a8a', hat:'#f2f2f2', lines:[
+  p:{name:'정 기술사 (구조)', col:'#4a5a8a', hat:'#f2f2f2', jl:{student:'자네, 아직 진로를 안 정했나? 레벨 5가 넘었다면 메뉴에서 전직부터 하게. 현장마다 직업 전용 공법이 있다네.', contractor:'시공사 출신 기술사도 많다네. 특급기술자가 되면 공법 비용이 더 줄지.', designer:'설계사라면 나와 같은 길이군. 기술사 면접에서 보세.', official:'발주기관 감독관이시군요. 대형 사업은 직급이 있어야 맡을 수 있습니다.', pubcorp:'공기업이라면 대형 기반시설 사업을 맡게 될 걸세.', researcher:'연구자라면 박사 학위논문 심사부터 준비하게. 현장 자료가 필요하면 언제든 오게.'}, lines:[
     '도시에 온 걸 환영하네. 이곳 괴물들은 들판의 녀석들보다 훨씬 질기지.',
     '기초는 지지력 안전율 3을 확보해야 해. 기초 폭을 넓히면 접지압이 줄고 Nγ 항도 커지지.',
     '연약층을 관통한 말뚝엔 부마찰력이 걸려. 점토가 침하하면 말뚝을 아래로 끌어내리지. 역청 코팅이 특효약이야.',
@@ -1380,7 +1411,7 @@ const NPCS = {
     '터널 막장은 안정수 N = (σv − σT)/cu 로 봐. 6을 넘으면 막장이 무너지지.',
     '막장압을 너무 올리면 지반이 위로 터져(blow-out). 갱내 배수는 지반을 단단하게 하지만, 지하수위가 내려가면 위쪽 점토가 압밀돼 지표가 가라앉아.',
     '그럴 땐 인공 함양으로 수위를 되살려. 안정성과 침하, 둘 다 잡아야 진짜 터널쟁이야.']},
-  i:{name:'강 부장 (항만공사)', col:'#1f6f8b', hat:'#f4f6fa', lines:[
+  i:{name:'강 부장 (항만공사)', col:'#1f6f8b', hat:'#f4f6fa', jl:{pubcorp:'같은 공기업 식구군! 해상풍력 단지는 운영사가 강풍 때 출력을 제한해 말뚝을 지키지.', official:'감독관님, 하천 골재 채취 허가는 교각 세굴과 바로 이어집니다.', designer:'케이슨 설계라면 감압 선반을 검토해 보세요. 상재하중을 통째로 받쳐 줍니다.', contractor:'시공사라면 수직구 바닥을 얼려 버리는 동결 공법도 쓸 수 있겠군요.', researcher:'연구자시라면 부산 바다의 지반 자료가 좋은 논문거리가 될 겁니다.'}, lines:[
     '부산 항만에 온 걸 환영하네, {n}. 여긴 바다와 강이 함께 흙을 괴롭히는 곳이지.',
     '서쪽 낙동강 하구 다리엔 세굴 뱀장어가, 북항 부두엔 케이슨 크랩이 있네. 남쪽 영도 태종대 절벽엔 낙석 가고일이 산다더군.',
     '동쪽 바다 해상풍력 단지와 남서쪽 가덕 해저터널 수직구는 배가 있어야 갈 수 있어. 고무보트를 준비하게.',
@@ -1659,7 +1690,8 @@ async function portal(ch){
 async function talkNPC(ch){
   const N = NPCS[ch]; held = null;
   if (N.menu){ openMenu(N.menu); return; }
-  W.busy = true; await talk(N.lines.map(l => l.replace('{n}', P.name)), N.name); W.busy = false;
+  const jl = N.jl && N.jl[P.job];
+  W.busy = true; await talk(N.lines.concat(jl ? [jl] : []).map(l => l.replace('{n}', P.name)), N.name); W.busy = false;
 }
 function facingNPC(){ const d = {u:[0,-1], d:[0,1], l:[-1,0], r:[1,0]}[P.dir]; const ch = tile(P.x + d[0], P.y + d[1]); if (NPCS[ch]) return ch;
   for (const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){ const c2 = tile(P.x+dx, P.y+dy); if (NPCS[c2]) return c2; } return null; }
@@ -2349,7 +2381,7 @@ function renderBattleUI(){
   $('forecast').innerHTML = fc;
   $('params').innerHTML = B.params.map(p => { const hid = p.h && !revealed(p.k); return `<dt>${p.l}</dt><dd class="${hid?'q':''}">${hid ? '? (조사 필요)' : paramVal(p, B, st) + (p.u ? ' ' + p.u : '')}</dd>`; }).join('');
   if (!BT.panel) $('skills').innerHTML = B.skills.map((sk, si) => {
-    const cost = costOf(sk), done = sk.once && BT.used.has(sk.id), lock = sk.req && !owns(sk.req), dis = BT.busy || cost > BT.budget || done || lock;
+    const cost = costOf(sk), done = sk.once && BT.used.has(sk.id), jlock = sk.job && P.job !== sk.job, lock = (sk.req && !owns(sk.req)) || jlock, dis = BT.busy || cost > BT.budget || done || lock;
     let pv = '';
     if (!previewOK(sk) && !done) pv = `<span class="pv" style="color:var(--dim)">🔍 예상 효과 ? · 필요 조사: ${needOf(sk).map(x => svList().find(v => v.id === x).name).join(', ')}</span>`;
     if (previewOK(sk) && !done){ const c = structuredClone(st); sk.apply(c, skillMul(sk));
@@ -2360,9 +2392,9 @@ function renderBattleUI(){
       if (BT.id === 'tunnel' && sk.id === 'epb' && c.sT > 0.8*B.sv(c)) pv += `<span class="pv" style="color:var(--hp)">⚠ 막장압 ${c.sT} kPa: 분출 위험!</span>`;
       if (B.limit && c[B.limit.k] > B.limit.max && c[B.limit.k] > st[B.limit.k]) pv += `<span class="pv" style="color:var(--hp)">⚠ ${B.limit.l} ${c[B.limit.k].toFixed(1)} ${B.limit.u}: 민원 발생!</span>`; }
     if (done) pv = `<span class="pv" style="color:var(--dim)">시공 완료</span>`;
-    if (lock) pv = `<span class="pv" style="color:var(--gold)">🔒 필요 장비: ${itemName(sk.req)} (상점)</span>`;
+    if (lock) pv = jlock ? `<span class="pv" style="color:var(--gold)">🔒 ${JOBS[sk.job].icon} ${JOBS[sk.job].name} 전용 공법</span>` : `<span class="pv" style="color:var(--gold)">🔒 필요 장비: ${itemName(sk.req)} (상점)</span>`;
     const m = effMul(sk.tag);
-    return `<button class="skill" data-id="${sk.id}" ${si < 9 ? `data-key="${si+1}"` : ''} ${dis?'disabled':''}><span class="sn">${sk.name}<span class="tag">${TAGN[sk.tag]}${m > 1.001 ? ' ×' + m.toFixed(2) : ''}</span></span><span class="sc"${sk.trap ? ' style="color:var(--gold)"' : ''}>${sk.trap ? '+' + sk.gain + '억' : cost + '억' + (cost < sk.cost ? '↓' : '')}</span><span class="sd">${sk.desc}</span>${pv}</button>`;
+    return `<button class="skill" data-id="${sk.id}" ${si < 9 ? `data-key="${si+1}"` : ''} ${dis?'disabled':''}><span class="sn">${sk.job ? JOBS[sk.job].icon + ' ' : ''}${sk.name}<span class="tag">${TAGN[sk.tag]}${m > 1.001 ? ' ×' + m.toFixed(2) : ''}</span></span><span class="sc"${sk.trap ? ' style="color:var(--gold)"' : ''}>${sk.trap ? '+' + sk.gain + '억' : cost + '억' + (cost < sk.cost ? '↓' : '')}</span><span class="sd">${sk.desc}</span>${pv}</button>`;
   }).join('');
   $('skills').querySelectorAll('.skill').forEach(b => b.onclick = () => useSkill(b.dataset.id));
   const ins = []; if (BT.insight) ins.push(`✦ 통찰: 다음 공법 효과 ×${BT.insight}`); if (BT.x2) ins.push('✦ 정밀 해석: 다음 공법 효과 ×2'); if (BT.extra) ins.push('✦ 돌관공사: 이번 턴에 공법을 한 번 더');
@@ -2378,7 +2410,7 @@ function renderBattleUI(){
 function floatText(txt, col, x, y){ const d = document.createElement('div'); d.className = 'float'; d.textContent = txt; d.style.color = col; d.style.left = x + '%'; d.style.top = y + '%'; $('floats').appendChild(d); setTimeout(() => d.remove(), 1500); }
 
 async function useSkill(id){
-  if (BT.busy) return; const sk = BT.B.skills.find(s => s.id === id), cost = costOf(sk); if (!sk || cost > BT.budget || (sk.req && !owns(sk.req))) return;
+  if (BT.busy) return; const sk = BT.B.skills.find(s => s.id === id), cost = costOf(sk); if (!sk || cost > BT.budget || (sk.req && !owns(sk.req)) || (sk.job && P.job !== sk.job)) return;
   BT.busy = true; renderBattleUI();
   let pr = {pred:null};
   const before = metricOf(BT.st), mult = skillMul(sk), bonus = mult > 1.001;
@@ -2463,12 +2495,12 @@ function calcScore(){
   const base = q ? q.gold*2 : B.xp*5;
   const left = B.pct ? Math.max(0, (BT.st.dl - BT.st.t*12)/2) : Math.max(0, BT.maxTurns - BT.turn);
   const parts = [['기본 점수', base], ['남은 예산 ×15', BT.budget*15], ['남은 턴 ×25', Math.round(left*25)], ['무피해 보너스', BT.dmgTaken ? 0 : 200], ['퀴즈 정답 ×50', BT.quizRight*50]];
-  let tot = parts.reduce((a,b) => a + b[1], 0); const mul = +((q ? [1,1,1.5,2.2][q.stars] : 1) * ({easy:0.7, normal:1, hard:1.5}[P.diff] || 1)).toFixed(2);
+  let tot = parts.reduce((a,b) => a + b[1], 0); const mul = +((q ? [1,1,1.5,2.2][q.stars]*(q.big ? 1 + 0.25*q.big : 1) : 1) * ({easy:0.7, normal:1, hard:1.5}[P.diff] || 1)).toFixed(2);
   if (BT.practice) tot = Math.round(tot/4); else tot = Math.round(tot*mul);
   return {parts, mul, tot};
 }
 async function victory(){
-  const B = BT.B, q = BT.quest; BT.fx.flash = 0; BT.dead = 1;
+  const B = BT.B, q = BT.quest, rank0 = P.rank, job0 = P.job; BT.fx.flash = 0; BT.dead = 1;
   await say(`${B.name}을(를) 물리쳤다! ${B.label} ${fmtV(metricOf(BT.st))}`); hideMsg();
   let xp = q ? q.xp : B.xp, gold = q ? q.gold : B.xp*2; let secretFirst = false;
   if (BT.secret){ if (P.secretWon){ xp = Math.round(xp/4); gold = Math.round(gold/4); } else { secretFirst = true; P.secretWon = true; if (!owns('hammer')) P.owned.push('hammer'); P.equip.tool = 'hammer'; } }
@@ -2477,14 +2509,15 @@ async function victory(){
   const sc = calcScore(); if (BT.secret && secretFirst) sc.tot += 1000; P.score += sc.tot; const key = q ? 'q:' + BT.id : BT.id; P.best[key] = Math.max(P.best[key]||0, sc.tot);
   P.gold += gold; const ev = gainXP(xp);
   const BT_id = BT.id, first = !q && !BT.secret && !P.cleared.includes(BT.id); if (first) P.cleared.push(BT.id);
-  if (q){ P.quests++; P.board = P.board.filter(x => x.id !== q.id); while (P.board.length < 3) { const n = genQuest(); if (!n) break; P.board.push(n); } }
+  if (q){ P.quests++; P.board = P.board.filter(x => x.id !== q.id); ensureBoard(); }
   save(); syncRank();
   await modal(`<h2>${q ? '의뢰 완료!' : '현장 해결!'}</h2><p>${B.lesson}</p>
     <div class="reward"><span>EXP +${xp}</span><span>+${gold}만원</span>${ev.map(e => `<span>${e}</span>`).join('')}</div>
     <dl class="score">${sc.parts.map(([a,b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}${sc.mul > 1 ? `<dt>난이도 배율</dt><dd>×${sc.mul}</dd>` : ''}${BT.practice ? '<dt>연습 모드</dt><dd>×¼</dd>' : ''}<dt class="tot">이번 점수</dt><dd class="tot">${sc.tot}</dd></dl>
     ${first ? `<p style="color:var(--gold)">★ 인장을 얻었다 (${P.cleared.length}/${ORDER.length})</p>` : ''}${secretFirst ? '<p style="color:var(--gold)">✨ 전설의 지질 해머를 얻어 장착했다! (모든 공법 효과 +35%)</p>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>계속</button></div>`);
   endBattle();
-  if (canChangeJob()) await chooseJob();
+  if (canChangeJob()){ if (!P.jobTalk){ P.jobTalk = true; save(); await talk(CAREER_TALK.map(l => l.replace('{n}', P.name)), NPCS.e.name); } await chooseJob(); }
+  if (job0 !== 'student' && P.rank > rank0) await promoScene();
   if (first && BT === null && P.cleared.length === 5 && P.cleared.every(k => CH1.includes(k))) await chapterEnd(1);
   if (first && CH2.includes(BT_id) && CH2.every(k => P.cleared.includes(k))) await chapterEnd(2);
   if (first && CH3.includes(BT_id) && ORDER.every(k => P.cleared.includes(k))) await chapterEnd(3);
@@ -2794,11 +2827,24 @@ function genQuest(){
     if (!ok) continue;
     const stars = pick([1,2,2,3]);
     return {id: Math.random().toString(36).slice(2,9), type, stars, title: pick(B.qt).replace('{loc}', pick(LOCS)), over,
-      gold: 100*stars + (B.ch === 2 ? 150 : 0) + 5*P.lv, xp: 40*stars + (B.ch === 2 ? 50 : 0) + 3*P.lv};
+      gold: 100*stars + 150*(B.ch-1) + 5*P.lv, xp: 40*stars + 50*(B.ch-1) + 3*P.lv};
   }
   return null;
 }
-function ensureBoard(){ while (P.board.length < 3){ const q = genQuest(); if (!q) break; P.board.push(q); } }
+/* 대형 수주: 직급이 있어야 받을 수 있는 큰 의뢰. 1장을 마치면 1단계, 2장을 마치면 2단계, 3장까지 마치면 3단계가 열린다 */
+const bigTier = () => CH3.every(k => P.cleared.includes(k)) ? 3 : CH2.every(k => P.cleared.includes(k)) ? 2 : CH1.every(k => P.cleared.includes(k)) ? 1 : 0;
+const rankNeed = r => `${ENG_RANKS[r]} · ${RES_RANKS[r]} 이상`;
+const canBig = q => jobR() >= q.big;
+function genBig(r){
+  const q = genQuest(); if (!q) return null; const B = BOSSES[q.type], f = 1.5 + 0.5*r;
+  return Object.assign(q, {big:r, stars:2, title:'🏆 ' + q.title + ' (대형)',
+    gold: Math.round((200 + 150*(B.ch-1) + 5*P.lv)*f), xp: Math.round((80 + 50*(B.ch-1) + 3*P.lv)*f)});
+}
+function ensureBoard(){
+  while (P.board.filter(q => !q.big).length < 3){ const q = genQuest(); if (!q) break; P.board.push(q); }
+  const T = bigTier();
+  while (T && P.board.filter(q => q.big).length < 2){ const have = P.board.filter(q => q.big).map(q => q.big), r = [T, Math.max(1, T-1)].find(x => !have.includes(x)) || T, q = genBig(r); if (!q) break; P.board.push(q); }
+}
 
 /* =========================================================
    메뉴
@@ -2828,7 +2874,7 @@ function menuStatus(){
     <div class="card"><div class="cn">${P.name}</div>
       <dl class="score"><dt>레벨</dt><dd>${P.lv}${P.lv < MAXLV ? ` (다음까지 ${XPNEED[P.lv] - P.xp} XP)` : ' (MAX)'}</dd><dt>최대 HP / 예산</dt><dd>${maxHp()} / ${maxBud()}</dd>
       <dt>누적 점수</dt><dd>${Math.round(P.score)}</dd><dt>인장</dt><dd>${P.cleared.length}/${ORDER.length}</dd><dt>완료 의뢰</dt><dd>${P.quests}</dd>
-      <dt>시험 마스터</dt><dd>${labDone('lab') ? '🔬 실내 ✓' : '🔬 실내 ' + TESTS.filter(t => t.kind==='lab' && P.tests[t.id]).length + '/7'} · ${labDone('field') ? '🚜 현장 ✓' : '🚜 현장 ' + TESTS.filter(t => t.kind==='field' && P.tests[t.id]).length + '/6'}</dd><dt>저장 코드</dt><dd style="font-family:monospace;color:var(--gold)">${CL.ready ? (P.code || CL.uid) : '-'}</dd><dt>난이도 · 패배</dt><dd>${DF().n} · ${P.fails||0}회</dd><dt>퀴즈 정답률</dt><dd>${P.qs.t ? Math.round(P.qs.r/P.qs.t*100) : 0}% (${P.qs.r}/${P.qs.t})</dd></dl>
+      <dt>시험 마스터</dt><dd>${labDone('lab') ? '🔬 실내 ✓' : '🔬 실내 ' + TESTS.filter(t => t.kind==='lab' && P.tests[t.id]).length + '/7'} · ${labDone('field') ? '🚜 현장 ✓' : '🚜 현장 ' + TESTS.filter(t => t.kind==='field' && P.tests[t.id]).length + '/6'} · ${labDone('sea') ? '🌊 해양 ✓' : '🌊 해양 ' + TESTS.filter(t => t.kind==='sea' && P.tests[t.id]).length + '/' + TESTS.filter(t => t.kind==='sea').length}</dd><dt>저장 코드</dt><dd style="font-family:monospace;color:var(--gold)">${CL.ready ? (P.code || CL.uid) : '-'}</dd><dt>난이도 · 패배</dt><dd>${DF().n} · ${P.fails||0}회</dd><dt>퀴즈 정답률</dt><dd>${P.qs.t ? Math.round(P.qs.r/P.qs.t*100) : 0}% (${P.qs.r}/${P.qs.t})</dd></dl>
       <div class="row" style="justify-content:flex-start"><label class="note" for="mCls">반 코드</label><input class="inp" id="mCls" maxlength="16" value="${(P.cls||'').replace(/"/g,'&quot;')}"><button class="btn sm" id="mClsSave">저장</button></div></div></div>`;
 }
 function perkState(pk){
@@ -2852,11 +2898,14 @@ function menuShop(){
     return `<div class="card ${on?'on':''}"><div class="cn">${e.name}<span class="tag">${SLOTN[e.slot]}</span></div><div class="cd">${e.desc}</div><div class="cf"><span>${own ? '보유' : e.price + '만원'}</span>${on ? '<button class="btn sm" data-unequip="'+e.slot+'">해제</button>' : own ? `<button class="btn sm" data-equip="${e.id}">장착</button>` : `<button class="btn sm" data-eqbuy="${e.id}" ${P.gold<e.price?'disabled':''}>구매</button>`}</div></div>`; }).join('')}</div>`;
 }
 function kcard(g){ const own = owns(g.id); return `<div class="card ${own?'on':''}"><div class="cn">${g.name}</div><div class="cd">${g.desc}</div><div class="cf"><span>${own ? '보유' : g.price + '만원'}</span>${own ? '<span style="color:var(--gold)">✓</span>' : `<button class="btn sm" data-kbuy="${g.id}" ${P.gold<g.price?'disabled':''}>구매</button>`}</div></div>`; }
+function qcard(q){ const B = BOSSES[q.type], ok = !q.big || canBig(q);
+  return `<div class="card ${ok ? '' : 'locked'}"><div class="cn">${q.title}</div><div class="cd">${B.name} 변종 · <span class="stars">${'★'.repeat(q.stars)}${'☆'.repeat(3-q.stars)}</span>${q.big ? `<br><span style="color:${ok ? 'var(--fs)' : 'var(--gold)'}">${ok ? '✓' : '🔒'} ${rankNeed(q.big)}${P.job === 'student' ? ' (전직 필요)' : ''}</span>` : ''}</div><div class="cf"><span>${q.gold}만원 · ${q.xp}XP</span><button class="btn sm gold" data-quest="${q.id}" ${ok ? '' : 'disabled'}>수락</button></div></div>`; }
 function menuQuest(){
   if (!P.cleared.length) return '<p>아직 해결한 현장이 없어 의뢰가 들어오지 않는다. 먼저 비탈 골렘을 물리치자.</p>';
   ensureBoard(); save();
   return `<p class="note">해결해 본 괴물의 변종 현장이 무작위로 들어온다. ★이 많을수록 예산이 빠듯하고 피해가 크지만 점수 배율이 높다 (★1 예산+3억·피해−30%, ★3 예산−2억·턴−1·피해+30%).</p>
-   <div class="cards">${P.board.map(q => { const B = BOSSES[q.type]; return `<div class="card"><div class="cn">${q.title}</div><div class="cd">${B.name} 변종 · <span class="stars">${'★'.repeat(q.stars)}${'☆'.repeat(3-q.stars)}</span></div><div class="cf"><span>${q.gold}만원 · ${q.xp}XP</span><button class="btn sm gold" data-quest="${q.id}">수락</button></div></div>`; }).join('')}</div>
+   <div class="cards">${P.board.filter(q => !q.big).map(qcard).join('')}</div>
+   ${bigTier() ? `<h4>🏆 대형 수주 <span class="note">(직급이 있어야 받을 수 있다 · 보상과 점수 배율이 크다)</span></h4><div class="cards">${P.board.filter(q => q.big).map(qcard).join('')}</div>` : '<p class="note">🏆 1장의 다섯 현장을 모두 해결하면 직급이 있어야 받을 수 있는 “대형 수주”가 들어온다.</p>'}
    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sm" id="mReroll">새 의뢰 목록 받기</button></div>`;
 }
 function bindMenu(){
@@ -2872,16 +2921,18 @@ function bindMenu(){
   on('[data-unequip]', b => { P.equip[b.dataset.unequip] = null; P.hp = Math.min(P.hp, maxHp()); save(); renderHud(); renderMenu(); });
   on('[data-kbuy]', b => { const g = GEAR.find(x => x.id === b.dataset.kbuy) || KEYITEMS.find(x => x.id === b.dataset.kbuy); if (!g || owns(g.id) || P.gold < g.price) return; P.gold -= g.price; P.owned.push(g.id); save(); renderHud(); renderMenu(); });
   on('#mReroll', () => { P.board = []; ensureBoard(); save(); renderMenu(); });
-  on('[data-quest]', b => { const q = P.board.find(x => x.id === b.dataset.quest); if (!q) return; closeModal(); startBattle(q.type, {quest:q}); });
+  on('[data-quest]', b => { const q = P.board.find(x => x.id === b.dataset.quest); if (!q || (q.big && !canBig(q))) return; closeModal(); startBattle(q.type, {quest:q}); });
 }
 async function loadRank(){
   const box = $('mbody'); if (!box) return;
   if (!CL.ready){ box.innerHTML = `<p>반 랭킹 서버가 연결되지 않았어요. (교수님: 구글 스프레드시트 Apps Script 웹 앱으로 열거나, 파일의 RANK_URL을 설정하세요.)</p><dl class="score"><dt>누적 점수</dt><dd>${Math.round(P.score)}</dd><dt>레벨</dt><dd>${P.lv}</dd><dt>인장</dt><dd>${P.cleared.length}/${ORDER.length}</dd></dl>`; return; }
   box.innerHTML = '<p class="note">랭킹을 불러오는 중…</p>';
   await syncRank();
+  const gone = () => !box.isConnected || menuTab !== 'rank';
   let rows = [];
   try { const r = await api('getRanking', ''); rows = (r && r.rows) || []; }
-  catch(e){ box.innerHTML = '<p>랭킹을 불러오지 못했어요. 인터넷 연결을 확인하고 잠시 후 다시 열어 주세요.</p>'; return; }
+  catch(e){ if (gone()) return; box.innerHTML = '<p>랭킹을 불러오지 못했어요. 인터넷 연결을 확인하고 잠시 후 다시 열어 주세요.</p>'; return; }
+  if (gone()) return;  /* 불러오는 동안 다른 탭으로 옮기면 그리지 않는다 */
   const classes = [...new Set(rows.map(r => r.cls).filter(Boolean))].sort();
   const sel = $('rkCls') ? $('rkCls').value : (P.cls || '');
   const view = rows.filter(r => !sel || r.cls === sel);

@@ -428,7 +428,6 @@ const hasPerk = id => P.perks.includes(id);
 /* 파생 능력치 */
 function maxHp(){ const r = jobR(); return 100 + 15*(P.lv-1) + (hasPerk('hp')?40:0) + (eq('head')?.hp||0) + (P.job==='pubcorp' ? 40 + 10*r : 0); }
 function maxBud(){ const r = jobR(); return Math.floor(12 + 1.5*(P.lv-1)) + (hasPerk('vet')?4:0) + (hasPerk('fore')?2:0) + (P.job==='official' ? 4 + r : 0); }
-function surveyCost(){ if (isRes()) return 0; return Math.max(0, 2 - (eq('survey')?.sc||0)); }
 function effMul(tag){ const r = jobR(); return (hasPerk(tag)?1.25:1) * (eq('tool')?.mul||1) * (P.job==='designer' ? 1.15 + 0.05*r : 1); }
 function costOf(sk){ if (sk.trap) return 0; const r = jobR(); return Math.max(1, sk.cost - (hasPerk('cost')?1:0) - (P.job==='contractor' ? (r>=3?2:1) : 0)); }
 function dmgMul(){ const r = jobR(); return (hasPerk('crisis')?0.6:1) * (eq('head')?.dmg||1) * (P.job==='pubcorp' ? 0.7 - 0.05*r : 1); }
@@ -887,6 +886,23 @@ const TRAPS = {
   quay:{name:'Dredged-soil fill', desc:'Swap the caisson fill for cheap dredged soil. γc −1.5 kN/m³', apply:s=>{s.gc=+(s.gc-1.5).toFixed(1);}},
   mono:{name:'Shorter driving', desc:'Save driving time. Embedment −2 m', apply:s=>{s.L=Math.max(8,+(s.L-2).toFixed(1));}},
   shaft:{name:'Over-pumping relief wells', desc:'Run the relief wells flat out to save time. Artesian head −3 m, outside water level −2 m', apply:s=>{s.hp=Math.max(4,s.hp-3); s.dd+=2; s.set=BOSSES.shaft.sett(s.dd);}}};
+/* 직업 전용 공법: 보스마다 하나. 실무에서 그 직업이 쓰는 수단이다 */
+const JOB_SK = {
+  slope:{job:'researcher',name:'Microbial cementation (MICP)',tag:'improve',cost:3,need:'bore',desc:'Urease-producing microbes precipitate calcium carbonate that binds the grains (c′ +6 kPa, φ′ +2°)',apply:(s,m)=>{s.c+=6*m; s.phi=Math.min(40,s.phi+2*m);}},
+  piping:{job:'pubcorp',name:'Upstream gate control',tag:'drain',cost:2,once:true,need:'perm',desc:'The river authority cuts the upstream weir release to lower the river (head difference −2 m, once)',apply:s=>{s.dh=Math.max(1,s.dh-2);}},
+  wall:{job:'designer',name:'Inverted-T redesign',tag:'geom',cost:3,once:true,need:'sample',desc:'Redesign as an inverted-T with a longer heel so the soil on the heel adds resistance (base width +1.2 m, once)',apply:s=>{s.B+=1.2;}},
+  liq:{job:'contractor',name:'Lattice deep soil mixing (DSM)',tag:'improve',cost:3,need:'spt',desc:'Overlapping cement columns form lattice walls that confine shear strain in the sand (CRR +0.07)',apply:(s,m)=>{s.add+=0.07*m;}},
+  consol:{job:'official',name:'Negotiate the opening date',tag:'geom',cost:2,once:true,need:'plate',desc:'As the client agency, agree with the stakeholders to push the opening date back 2 months (once)',apply:s=>{s.dl+=2;}},
+  found:{job:'official',name:'Permit for one fewer storey',tag:'geom',cost:2,once:true,need:'plt',desc:'Amend the building permit to cut the storey count. Footing load −20% (once)',apply:s=>{s.Q=Math.round(s.Q*0.8);}},
+  pile:{job:'researcher',name:'Pile base grouting',tag:'improve',cost:3,need:'load',desc:'Inject cement grout under high pressure at the pile tip to pre-compress the soil below (base resistance qb +1500 kPa)',apply:(s,m)=>{s.qb+=Math.round(1500*m);}},
+  exc:{job:'designer',name:'Zoned excavation design',tag:'geom',cost:3,once:true,need:'plan',desc:'Leave large berms at the edges, dig the middle zone by zone and cast the base slab early (effective depth −3 m, once)',apply:s=>{s.berm=Math.min(4.5,s.berm+3);}},
+  tunnel:{job:'pubcorp',name:'Grouted cutoff ring',tag:'improve',cost:3,need:'probe',desc:'Grout a watertight ring around the tunnel that blocks water and stiffens the ground (cu +6 kPa, surface settlement −1.5 cm)',apply:(s,m)=>{s.cu+=6*m; s.set=Math.max(0,s.set-1.5*m);}},
+  scour:{job:'official',name:'Ban river dredging',tag:'geom',cost:2,once:true,need:'bed',desc:'Ban aggregate mining near the bridge and restore the bed, giving back foundation depth (embedment +1 m, once)',apply:s=>{s.Df=+(s.Df+1).toFixed(1);}},
+  rock:{job:'contractor',name:'Joint-filling grouting',tag:'improve',cost:3,need:'joint',desc:'Fill the open joints with cement grout (joint cohesion c +10 kPa)',apply:(s,m)=>{s.c+=Math.round(10*m);}},
+  quay:{job:'designer',name:'Relieving platform design',tag:'geom',cost:3,once:true,need:'back',desc:'Add a relieving platform behind the caisson to carry the surcharge. Backfill surcharge q halved (once)',apply:s=>{s.q=+(s.q*0.5).toFixed(1);}},
+  mono:{job:'pubcorp',name:'Storm curtailment',tag:'geom',cost:2,once:true,need:'met',desc:'The wind-farm operator pitches the blades in high winds to cut thrust (horizontal load −20%, once)',apply:s=>{s.H=Math.round(s.H*0.8);}},
+  shaft:{job:'contractor',name:'Ground freezing',tag:'improve',cost:4,once:true,need:'piez',desc:'Freeze pipes turn the sand below the base into a watertight plug (like +4 m of clay, no settlement, once)',apply:s=>{s.plug=+(s.plug+4).toFixed(1);}}};
+for (const k of ORDER){ const j = JOB_SK[k]; BOSSES[k].skills.push(Object.assign({id:'job'}, j)); NEEDS[k].job = j.need; }
 for (const k of ORDER){ const t = TRAPS[k]; BOSSES[k].skills.push({id:'trap', trap:true, once:true, cost:0, gain:3, tag:'cut', name:'💸 ' + t.name, desc:t.desc + ' (budget +3 M$)', apply:t.apply}); }
 const SV_TEST = {
   slope:{bore:'ds', piezo:'pump'}, piping:{bore:'gs', perm:'perm'}, wall:{sample:'ds', well:'pump'}, liq:{spt:'spt', well:'pump'},
@@ -1245,10 +1261,25 @@ function updateRank(){
 }
 function examReady(){ if (P.job === 'student') return null; const i = P.rank + 1, lv = rankLvOf(P.job), ex = examOf(P.job); return (i < lv.length && ex[i] && !P.examOK[i] && P.lv >= lv[i]) ? {i, name:ex[i]} : null; }
 const canChangeJob = () => P.job === 'student' && P.lv >= 5;
+const CAREER_TALK = [
+  '{n}, level 5 already! Time to choose a career. On the same site, each profession fights with different tools.',
+  '🏗️ Contractors build. They use construction techniques like deep mixing, grouting and ground freezing, and keep costs down.',
+  '📐 Designers win with calculation. They redesign sections and re-sequence excavations to get more out of the same money.',
+  '🏛️ Officials are the client agency. Permits and schedule talks change the problem itself, and they bring in more budget.',
+  '🏢 Public corporations run the facilities. They are strong at operational tools like gate control, turbine control and cutoffs, and at emergency response.',
+  '🔬 Researchers bring new technology: methods like microbial cementation and base grouting, and the literature makes them strong at quizzes.',
+  'Every site has one profession-only method, locked until you have that job. And as your rank rises you can take “major contract” requests.',
+  'You can’t change it once you choose, so choose well!'];
+const RANK_PERK = {contractor:r => r >= 3 ? 'All methods cost −2' : 'All methods cost −1', designer:r => `Method effect +${15 + 5*r}%`, official:r => `Starting budget +${4 + r} M$`,
+  pubcorp:r => `Max HP +${40 + 10*r}, collapse damage −${30 + 5*r}%`, researcher:r => `Quiz reward budget +${2 + r} M$`};
+async function promoScene(){
+  const r = P.rank, J = JOBS[P.job], ex = examReady(), unlock = r >= 1 && r <= 3 ? `<p>🏆 You can now take “${rankNeed(r)}” major contracts.</p>` : '';
+  await modal(`<h2>🎉 Promoted! ${J.icon} ${jobTitle()}</h2><p>${P.name}’s field experience has been recognized.</p><div class="reward"><span>${RANK_PERK[P.job](r)}</span>${isTop() ? `<span>${J.sp} twice per battle</span>` : ''}</div>${unlock}${ex ? `<p style="color:var(--gold)">📝 The next rank requires passing the “${ex.name}”. Take it from Menu › Status·Job.</p>` : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>Continue</button></div>`);
+}
 async function chooseJob(){
   const ids = ['contractor','designer','official','pubcorp','researcher'];
   const html = `<div class="mhead"><h2>Choose a career</h2><button class="x" aria-label="Close">✕</button></div><p>Your days as a civil engineering student are over. Which path will you take? Once chosen, it cannot be changed.</p>
-   <div class="cards">${ids.map(j => `<div class="card"><div class="cn">${JOBS[j].icon} ${JOBS[j].name}</div><div class="cd">${JOBS[j].desc}</div><div class="cd" style="flex:0">${ranksOf(j).join(' → ')}</div><div class="cf"><span></span><button class="btn sm" data-j="${j}">Choose this</button></div></div>`).join('')}</div>`;
+   <div class="cards">${ids.map(j => `<div class="card"><div class="cn">${JOBS[j].icon} ${JOBS[j].name}</div><div class="cd">${JOBS[j].desc}</div><div class="cd" style="flex:0">${ranksOf(j).join(' → ')}</div><div class="cd" style="flex:0;color:var(--gold)">Exclusive methods: ${Object.values(JOB_SK).filter(x => x.job === j).map(x => x.name).join(', ')}</div><div class="cf"><span></span><button class="btn sm" data-j="${j}">Choose this</button></div></div>`).join('')}</div>`;
   return new Promise(res => {
     $('modalBody').innerHTML = html; $('modal').classList.add('wide'); $('modal').classList.remove('hidden');
     $('modalBody').querySelector('.x').onclick = () => { closeModal(); res(false); };
@@ -1343,7 +1374,7 @@ const MAPS = [
 const MW = 24, MH = 15, TS = 16;
 const tile = (x,y) => (y<0||y>=MH||x<0||x>=MW) ? '^' : MAPS[P.map].tiles[y][x];
 const NPCS = {
-  e:{name:'Mr. Kim (senior)', col:'#2c6fbf', hat:'#f2f2f2', lines:[
+  e:{name:'Mr. Kim (senior)', col:'#2c6fbf', hat:'#f2f2f2', jl:{contractor:'A contractor, huh? Listen to the site foremen. Keeping to schedule is what skill means.', designer:'So you’re a designer. Never forget that one page of calculations can save a whole site.', official:'A public official! For the client agency, schedules and permits are countermeasures too.', pubcorp:'You joined a public corporation. Your job is to keep what’s been built safe for decades.', researcher:'Grad school! Today’s new technology is tomorrow’s standard method.'}, lines:[
     'Welcome, {n}! Monsters made of soil and water are running wild around here.',
     'In battle you win by raising the FS to the target with engineering methods. If the FS drops below 1 after a monster’s attack, a collapse costs you HP.',
     'The Slope Golem is on the northern mountain. You can charge right in!',
@@ -1368,7 +1399,7 @@ const NPCS = {
     'The Swamp Lord’s weapon is time. Settlement must finish before opening day.',
     'PVDs without a sand mat are half useless — the water has nowhere to go.',
     'Pile the fill too high and the foundation fails. Capacity is about 5.14 cu, a bit over 100 kPa here.']},
-  p:{name:'Mr. Jung (structural PE)', col:'#4a5a8a', hat:'#f2f2f2', lines:[
+  p:{name:'Mr. Jung (structural PE)', col:'#4a5a8a', hat:'#f2f2f2', jl:{student:'Still haven’t chosen a career? If you’re past level 5, pick a job from the menu first. Every site has a profession-only method.', contractor:'Plenty of PEs came up through contractors. At Master Engineer your method costs drop further.', designer:'A designer, the same road as mine. See you at the PE interview.', official:'You’re the client’s supervisor, I see. Major projects need rank to take on.', pubcorp:'At a public corporation you’ll end up running major infrastructure projects.', researcher:'As a researcher, start preparing for your PhD defense. Come by whenever you need field data.'}, lines:[
     'Welcome to the city. Monsters here are much tougher than the ones in the fields.',
     'Foundations need a bearing FS of 3. Widen the footing to lower contact pressure and grow the Nγ term.',
     'Piles through soft layers get negative skin friction. When clay settles it drags piles down. Bitumen coating is the cure.',
@@ -1380,7 +1411,7 @@ const NPCS = {
     'Judge the tunnel face by stability number N = (σv − σT)/cu. Above 6 the face collapses.',
     'Raise face pressure too much and the ground blows out. In-tunnel drainage stiffens the ground, but drawdown consolidates the clay above and the surface sinks.',
     'Then use artificial recharge to restore the water. Control both stability and settlement — that’s a real tunnel engineer.']},
-  i:{name:'Manager Kang (Port Authority)', col:'#1f6f8b', hat:'#f4f6fa', lines:[
+  i:{name:'Manager Kang (Port Authority)', col:'#1f6f8b', hat:'#f4f6fa', jl:{pubcorp:'One of the public-corporation family! At the wind farm, the operator curtails output in high winds to protect the piles.', official:'Supervisor, permits for river aggregate mining feed straight into pier scour.', designer:'For the caisson design, look at a relieving platform. It carries the whole surcharge.', contractor:'As a contractor you could freeze the shaft base solid with ground freezing.', researcher:'As a researcher, Busan’s seabed data would make a good paper.'}, lines:[
     'Welcome to the Port of Busan, {n}. Here the sea and the river torment the soil together.',
     'The Scour Eel lives at the bridge over the Nakdong estuary to the west, and the Caisson Crab at the North Port wharf. They say the Rockfall Gargoyle lives on the Taejongdae cliffs of Yeongdo to the south.',
     'The offshore wind farm to the east and the Gadeok undersea-tunnel shaft to the southwest can only be reached by boat. Get a rubber boat ready.',
@@ -1659,7 +1690,8 @@ async function portal(ch){
 async function talkNPC(ch){
   const N = NPCS[ch]; held = null;
   if (N.menu){ openMenu(N.menu); return; }
-  W.busy = true; await talk(N.lines.map(l => l.replace('{n}', P.name)), N.name); W.busy = false;
+  const jl = N.jl && N.jl[P.job];
+  W.busy = true; await talk(N.lines.concat(jl ? [jl] : []).map(l => l.replace('{n}', P.name)), N.name); W.busy = false;
 }
 function facingNPC(){ const d = {u:[0,-1], d:[0,1], l:[-1,0], r:[1,0]}[P.dir]; const ch = tile(P.x + d[0], P.y + d[1]); if (NPCS[ch]) return ch;
   for (const [dx,dy] of [[0,-1],[0,1],[-1,0],[1,0]]){ const c2 = tile(P.x+dx, P.y+dy); if (NPCS[c2]) return c2; } return null; }
@@ -2349,7 +2381,7 @@ function renderBattleUI(){
   $('forecast').innerHTML = fc;
   $('params').innerHTML = B.params.map(p => { const hid = p.h && !revealed(p.k); return `<dt>${p.l}</dt><dd class="${hid?'q':''}">${hid ? '? (needs investigation)' : paramVal(p, B, st) + (p.u ? ' ' + p.u : '')}</dd>`; }).join('');
   if (!BT.panel) $('skills').innerHTML = B.skills.map((sk, si) => {
-    const cost = costOf(sk), done = sk.once && BT.used.has(sk.id), lock = sk.req && !owns(sk.req), dis = BT.busy || cost > BT.budget || done || lock;
+    const cost = costOf(sk), done = sk.once && BT.used.has(sk.id), jlock = sk.job && P.job !== sk.job, lock = (sk.req && !owns(sk.req)) || jlock, dis = BT.busy || cost > BT.budget || done || lock;
     let pv = '';
     if (!previewOK(sk) && !done) pv = `<span class="pv" style="color:var(--dim)">🔍 Effect ? · needs: ${needOf(sk).map(x => svList().find(v => v.id === x).name).join(', ')}</span>`;
     if (previewOK(sk) && !done){ const c = structuredClone(st); sk.apply(c, skillMul(sk));
@@ -2360,9 +2392,9 @@ function renderBattleUI(){
       if (BT.id === 'tunnel' && sk.id === 'epb' && c.sT > 0.8*B.sv(c)) pv += `<span class="pv" style="color:var(--hp)">⚠ Face pressure ${c.sT} kPa: blow-out risk!</span>`;
       if (B.limit && c[B.limit.k] > B.limit.max && c[B.limit.k] > st[B.limit.k]) pv += `<span class="pv" style="color:var(--hp)">⚠ ${B.limit.l} ${c[B.limit.k].toFixed(1)} ${B.limit.u}: complaints!</span>`; }
     if (done) pv = `<span class="pv" style="color:var(--dim)">Built</span>`;
-    if (lock) pv = `<span class="pv" style="color:var(--gold)">🔒 Requires: ${itemName(sk.req)} (shop)</span>`;
+    if (lock) pv = jlock ? `<span class="pv" style="color:var(--gold)">🔒 ${JOBS[sk.job].icon} ${JOBS[sk.job].name}-only method</span>` : `<span class="pv" style="color:var(--gold)">🔒 Requires: ${itemName(sk.req)} (shop)</span>`;
     const m = effMul(sk.tag);
-    return `<button class="skill" data-id="${sk.id}" ${si < 9 ? `data-key="${si+1}"` : ''} ${dis?'disabled':''}><span class="sn">${sk.name}<span class="tag">${TAGN[sk.tag]}${m > 1.001 ? ' ×' + m.toFixed(2) : ''}</span></span><span class="sc"${sk.trap ? ' style="color:var(--gold)"' : ''}>${sk.trap ? '+' + sk.gain + ' M$' : cost + ' M$' + (cost < sk.cost ? '↓' : '')}</span><span class="sd">${sk.desc}</span>${pv}</button>`;
+    return `<button class="skill" data-id="${sk.id}" ${si < 9 ? `data-key="${si+1}"` : ''} ${dis?'disabled':''}><span class="sn">${sk.job ? JOBS[sk.job].icon + ' ' : ''}${sk.name}<span class="tag">${TAGN[sk.tag]}${m > 1.001 ? ' ×' + m.toFixed(2) : ''}</span></span><span class="sc"${sk.trap ? ' style="color:var(--gold)"' : ''}>${sk.trap ? '+' + sk.gain + ' M$' : cost + ' M$' + (cost < sk.cost ? '↓' : '')}</span><span class="sd">${sk.desc}</span>${pv}</button>`;
   }).join('');
   $('skills').querySelectorAll('.skill').forEach(b => b.onclick = () => useSkill(b.dataset.id));
   const ins = []; if (BT.insight) ins.push(`✦ Insight: next method ×${BT.insight}`); if (BT.x2) ins.push('✦ Precise Analysis: next method ×2'); if (BT.extra) ins.push('✦ Crash Work: one more method this turn');
@@ -2378,7 +2410,7 @@ function renderBattleUI(){
 function floatText(txt, col, x, y){ const d = document.createElement('div'); d.className = 'float'; d.textContent = txt; d.style.color = col; d.style.left = x + '%'; d.style.top = y + '%'; $('floats').appendChild(d); setTimeout(() => d.remove(), 1500); }
 
 async function useSkill(id){
-  if (BT.busy) return; const sk = BT.B.skills.find(s => s.id === id), cost = costOf(sk); if (!sk || cost > BT.budget || (sk.req && !owns(sk.req))) return;
+  if (BT.busy) return; const sk = BT.B.skills.find(s => s.id === id), cost = costOf(sk); if (!sk || cost > BT.budget || (sk.req && !owns(sk.req)) || (sk.job && P.job !== sk.job)) return;
   BT.busy = true; renderBattleUI();
   let pr = {pred:null};
   const before = metricOf(BT.st), mult = skillMul(sk), bonus = mult > 1.001;
@@ -2463,12 +2495,12 @@ function calcScore(){
   const base = q ? q.gold*2 : B.xp*5;
   const left = B.pct ? Math.max(0, (BT.st.dl - BT.st.t*12)/2) : Math.max(0, BT.maxTurns - BT.turn);
   const parts = [['Base score', base], ['Budget left ×15', BT.budget*15], ['Turns left ×25', Math.round(left*25)], ['No-damage bonus', BT.dmgTaken ? 0 : 200], ['Correct quizzes ×50', BT.quizRight*50]];
-  let tot = parts.reduce((a,b) => a + b[1], 0); const mul = +((q ? [1,1,1.5,2.2][q.stars] : 1) * ({easy:0.7, normal:1, hard:1.5}[P.diff] || 1)).toFixed(2);
+  let tot = parts.reduce((a,b) => a + b[1], 0); const mul = +((q ? [1,1,1.5,2.2][q.stars]*(q.big ? 1 + 0.25*q.big : 1) : 1) * ({easy:0.7, normal:1, hard:1.5}[P.diff] || 1)).toFixed(2);
   if (BT.practice) tot = Math.round(tot/4); else tot = Math.round(tot*mul);
   return {parts, mul, tot};
 }
 async function victory(){
-  const B = BT.B, q = BT.quest; BT.fx.flash = 0; BT.dead = 1;
+  const B = BT.B, q = BT.quest, rank0 = P.rank, job0 = P.job; BT.fx.flash = 0; BT.dead = 1;
   await say(`${B.name} defeated! ${B.label} ${fmtV(metricOf(BT.st))}`); hideMsg();
   let xp = q ? q.xp : B.xp, gold = q ? q.gold : B.xp*2; let secretFirst = false;
   if (BT.secret){ if (P.secretWon){ xp = Math.round(xp/4); gold = Math.round(gold/4); } else { secretFirst = true; P.secretWon = true; if (!owns('hammer')) P.owned.push('hammer'); P.equip.tool = 'hammer'; } }
@@ -2477,14 +2509,15 @@ async function victory(){
   const sc = calcScore(); if (BT.secret && secretFirst) sc.tot += 1000; P.score += sc.tot; const key = q ? 'q:' + BT.id : BT.id; P.best[key] = Math.max(P.best[key]||0, sc.tot);
   P.gold += gold; const ev = gainXP(xp);
   const BT_id = BT.id, first = !q && !BT.secret && !P.cleared.includes(BT.id); if (first) P.cleared.push(BT.id);
-  if (q){ P.quests++; P.board = P.board.filter(x => x.id !== q.id); while (P.board.length < 3) { const n = genQuest(); if (!n) break; P.board.push(n); } }
+  if (q){ P.quests++; P.board = P.board.filter(x => x.id !== q.id); ensureBoard(); }
   save(); syncRank();
   await modal(`<h2>${q ? 'Request complete!' : 'Site cleared!'}</h2><p>${B.lesson}</p>
     <div class="reward"><span>EXP +${xp}</span><span>+${gold} k$</span>${ev.map(e => `<span>${e}</span>`).join('')}</div>
     <dl class="score">${sc.parts.map(([a,b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}${sc.mul > 1 ? `<dt>Difficulty multiplier</dt><dd>×${sc.mul}</dd>` : ''}${BT.practice ? '<dt>Practice mode</dt><dd>×¼</dd>' : ''}<dt class="tot">Score this time</dt><dd class="tot">${sc.tot}</dd></dl>
     ${first ? `<p style="color:var(--gold)">★ Seal obtained (${P.cleared.length}/${ORDER.length})</p>` : ''}${secretFirst ? '<p style="color:var(--gold)">✨ You obtained and equipped the Legendary Geologist’s Hammer! (all method effects +35%)</p>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>Continue</button></div>`);
   endBattle();
-  if (canChangeJob()) await chooseJob();
+  if (canChangeJob()){ if (!P.jobTalk){ P.jobTalk = true; save(); await talk(CAREER_TALK.map(l => l.replace('{n}', P.name)), NPCS.e.name); } await chooseJob(); }
+  if (job0 !== 'student' && P.rank > rank0) await promoScene();
   if (first && BT === null && P.cleared.length === 5 && P.cleared.every(k => CH1.includes(k))) await chapterEnd(1);
   if (first && CH2.includes(BT_id) && CH2.every(k => P.cleared.includes(k))) await chapterEnd(2);
   if (first && CH3.includes(BT_id) && ORDER.every(k => P.cleared.includes(k))) await chapterEnd(3);
@@ -2794,11 +2827,24 @@ function genQuest(){
     if (!ok) continue;
     const stars = pick([1,2,2,3]);
     return {id: Math.random().toString(36).slice(2,9), type, stars, title: pick(B.qt).replace('{loc}', pick(LOCS)), over,
-      gold: 100*stars + (B.ch === 2 ? 150 : 0) + 5*P.lv, xp: 40*stars + (B.ch === 2 ? 50 : 0) + 3*P.lv};
+      gold: 100*stars + 150*(B.ch-1) + 5*P.lv, xp: 40*stars + 50*(B.ch-1) + 3*P.lv};
   }
   return null;
 }
-function ensureBoard(){ while (P.board.length < 3){ const q = genQuest(); if (!q) break; P.board.push(q); } }
+/* 대형 수주: 직급이 있어야 받을 수 있는 큰 의뢰. 1장을 마치면 1단계, 2장을 마치면 2단계, 3장까지 마치면 3단계가 열린다 */
+const bigTier = () => CH3.every(k => P.cleared.includes(k)) ? 3 : CH2.every(k => P.cleared.includes(k)) ? 2 : CH1.every(k => P.cleared.includes(k)) ? 1 : 0;
+const rankNeed = r => `${ENG_RANKS[r]} · ${RES_RANKS[r]} or higher`;
+const canBig = q => jobR() >= q.big;
+function genBig(r){
+  const q = genQuest(); if (!q) return null; const B = BOSSES[q.type], f = 1.5 + 0.5*r;
+  return Object.assign(q, {big:r, stars:2, title:'🏆 ' + q.title + ' (major)',
+    gold: Math.round((200 + 150*(B.ch-1) + 5*P.lv)*f), xp: Math.round((80 + 50*(B.ch-1) + 3*P.lv)*f)});
+}
+function ensureBoard(){
+  while (P.board.filter(q => !q.big).length < 3){ const q = genQuest(); if (!q) break; P.board.push(q); }
+  const T = bigTier();
+  while (T && P.board.filter(q => q.big).length < 2){ const have = P.board.filter(q => q.big).map(q => q.big), r = [T, Math.max(1, T-1)].find(x => !have.includes(x)) || T, q = genBig(r); if (!q) break; P.board.push(q); }
+}
 
 /* =========================================================
    메뉴
@@ -2828,7 +2874,7 @@ function menuStatus(){
     <div class="card"><div class="cn">${P.name}</div>
       <dl class="score"><dt>Level</dt><dd>${P.lv}${P.lv < MAXLV ? ` (to next: ${XPNEED[P.lv] - P.xp} XP)` : ' (MAX)'}</dd><dt>Max HP / Budget</dt><dd>${maxHp()} / ${maxBud()}</dd>
       <dt>Total score</dt><dd>${Math.round(P.score)}</dd><dt>Seals</dt><dd>${P.cleared.length}/${ORDER.length}</dd><dt>Requests done</dt><dd>${P.quests}</dd>
-      <dt>Test mastery</dt><dd>${labDone('lab') ? '🔬 Lab ✓' : '🔬 Lab ' + TESTS.filter(t => t.kind==='lab' && P.tests[t.id]).length + '/7'} · ${labDone('field') ? '🚜 Field ✓' : '🚜 Field ' + TESTS.filter(t => t.kind==='field' && P.tests[t.id]).length + '/6'}</dd><dt>Save code</dt><dd style="font-family:monospace;color:var(--gold)">${CL.ready ? (P.code || CL.uid) : '-'}</dd><dt>Difficulty · Losses</dt><dd>${DF().n} · ${P.fails||0}</dd><dt>Quiz accuracy</dt><dd>${P.qs.t ? Math.round(P.qs.r/P.qs.t*100) : 0}% (${P.qs.r}/${P.qs.t})</dd></dl>
+      <dt>Test mastery</dt><dd>${labDone('lab') ? '🔬 Lab ✓' : '🔬 Lab ' + TESTS.filter(t => t.kind==='lab' && P.tests[t.id]).length + '/7'} · ${labDone('field') ? '🚜 Field ✓' : '🚜 Field ' + TESTS.filter(t => t.kind==='field' && P.tests[t.id]).length + '/6'} · ${labDone('sea') ? '🌊 Marine ✓' : '🌊 Marine ' + TESTS.filter(t => t.kind==='sea' && P.tests[t.id]).length + '/' + TESTS.filter(t => t.kind==='sea').length}</dd><dt>Save code</dt><dd style="font-family:monospace;color:var(--gold)">${CL.ready ? (P.code || CL.uid) : '-'}</dd><dt>Difficulty · Losses</dt><dd>${DF().n} · ${P.fails||0}</dd><dt>Quiz accuracy</dt><dd>${P.qs.t ? Math.round(P.qs.r/P.qs.t*100) : 0}% (${P.qs.r}/${P.qs.t})</dd></dl>
       <div class="row" style="justify-content:flex-start"><label class="note" for="mCls">Class code</label><input class="inp" id="mCls" maxlength="16" value="${(P.cls||'').replace(/"/g,'&quot;')}"><button class="btn sm" id="mClsSave">Save</button></div></div></div>`;
 }
 function perkState(pk){
@@ -2852,11 +2898,14 @@ function menuShop(){
     return `<div class="card ${on?'on':''}"><div class="cn">${e.name}<span class="tag">${SLOTN[e.slot]}</span></div><div class="cd">${e.desc}</div><div class="cf"><span>${own ? 'Owned' : e.price + ' k$'}</span>${on ? '<button class="btn sm" data-unequip="'+e.slot+'">Unequip</button>' : own ? `<button class="btn sm" data-equip="${e.id}">Equip</button>` : `<button class="btn sm" data-eqbuy="${e.id}" ${P.gold<e.price?'disabled':''}>Buy</button>`}</div></div>`; }).join('')}</div>`;
 }
 function kcard(g){ const own = owns(g.id); return `<div class="card ${own?'on':''}"><div class="cn">${g.name}</div><div class="cd">${g.desc}</div><div class="cf"><span>${own ? 'Owned' : g.price + ' k$'}</span>${own ? '<span style="color:var(--gold)">✓</span>' : `<button class="btn sm" data-kbuy="${g.id}" ${P.gold<g.price?'disabled':''}>Buy</button>`}</div></div>`; }
+function qcard(q){ const B = BOSSES[q.type], ok = !q.big || canBig(q);
+  return `<div class="card ${ok ? '' : 'locked'}"><div class="cn">${q.title}</div><div class="cd">${B.name} variant · <span class="stars">${'★'.repeat(q.stars)}${'☆'.repeat(3-q.stars)}</span>${q.big ? `<br><span style="color:${ok ? 'var(--fs)' : 'var(--gold)'}">${ok ? '✓' : '🔒'} ${rankNeed(q.big)}${P.job === 'student' ? ' (job required)' : ''}</span>` : ''}</div><div class="cf"><span>${q.gold} k$ · ${q.xp}XP</span><button class="btn sm gold" data-quest="${q.id}" ${ok ? '' : 'disabled'}>Accept</button></div></div>`; }
 function menuQuest(){
   if (!P.cleared.length) return '<p>No sites cleared yet, so no requests come in. Defeat the Slope Golem first.</p>';
   ensureBoard(); save();
   return `<p class="note">Variant sites of monsters you have beaten arrive at random. More ★ means tighter budget and more damage but a higher score multiplier (★1 budget +3 M$·damage −30%, ★3 budget −2 M$·turns −1·damage +30%).</p>
-   <div class="cards">${P.board.map(q => { const B = BOSSES[q.type]; return `<div class="card"><div class="cn">${q.title}</div><div class="cd">${B.name} variant · <span class="stars">${'★'.repeat(q.stars)}${'☆'.repeat(3-q.stars)}</span></div><div class="cf"><span>${q.gold} k$ · ${q.xp}XP</span><button class="btn sm gold" data-quest="${q.id}">Accept</button></div></div>`; }).join('')}</div>
+   <div class="cards">${P.board.filter(q => !q.big).map(qcard).join('')}</div>
+   ${bigTier() ? `<h4>🏆 Major contracts <span class="note">(rank required · bigger rewards and score multiplier)</span></h4><div class="cards">${P.board.filter(q => q.big).map(qcard).join('')}</div>` : '<p class="note">🏆 Clear all five Chapter 1 sites and “major contracts” that require rank will start coming in.</p>'}
    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sm" id="mReroll">Get new requests</button></div>`;
 }
 function bindMenu(){
@@ -2872,16 +2921,18 @@ function bindMenu(){
   on('[data-unequip]', b => { P.equip[b.dataset.unequip] = null; P.hp = Math.min(P.hp, maxHp()); save(); renderHud(); renderMenu(); });
   on('[data-kbuy]', b => { const g = GEAR.find(x => x.id === b.dataset.kbuy) || KEYITEMS.find(x => x.id === b.dataset.kbuy); if (!g || owns(g.id) || P.gold < g.price) return; P.gold -= g.price; P.owned.push(g.id); save(); renderHud(); renderMenu(); });
   on('#mReroll', () => { P.board = []; ensureBoard(); save(); renderMenu(); });
-  on('[data-quest]', b => { const q = P.board.find(x => x.id === b.dataset.quest); if (!q) return; closeModal(); startBattle(q.type, {quest:q}); });
+  on('[data-quest]', b => { const q = P.board.find(x => x.id === b.dataset.quest); if (!q || (q.big && !canBig(q))) return; closeModal(); startBattle(q.type, {quest:q}); });
 }
 async function loadRank(){
   const box = $('mbody'); if (!box) return;
   if (!CL.ready){ box.innerHTML = `<p>Ranking server not connected. (Instructor: open via the Google Sheets Apps Script web app, or set RANK_URL in the file.)</p><dl class="score"><dt>Total score</dt><dd>${Math.round(P.score)}</dd><dt>Level</dt><dd>${P.lv}</dd><dt>Seals</dt><dd>${P.cleared.length}/${ORDER.length}</dd></dl>`; return; }
   box.innerHTML = '<p class="note">Loading ranking…</p>';
   await syncRank();
+  const gone = () => !box.isConnected || menuTab !== 'rank';
   let rows = [];
   try { const r = await api('getRanking', ''); rows = (r && r.rows) || []; }
-  catch(e){ box.innerHTML = '<p>Couldn’t load the ranking. Check your connection and try again shortly.</p>'; return; }
+  catch(e){ if (gone()) return; box.innerHTML = '<p>Couldn’t load the ranking. Check your connection and try again shortly.</p>'; return; }
+  if (gone()) return;  /* skip drawing if the player left the tab while loading */
   const classes = [...new Set(rows.map(r => r.cls).filter(Boolean))].sort();
   const sel = $('rkCls') ? $('rkCls').value : (P.cls || '');
   const view = rows.filter(r => !sel || r.cls === sel);

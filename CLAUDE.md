@@ -20,6 +20,7 @@
 - 지도는 `MAPS` (24×15). 보스 현장 타일은 `SITE_CH` 순서(`1`~`9`, `A`~`E`)로 `ORDER`와 짝지어진다.
 - 보스를 추가하려면 `BOSSES`, `SURVEYS`, `NEEDS`, `TRAPS`, `SV_TEST`, `HIDE_OF`, `FORMULA`, `SYM`, `drawField`의 case, `SCENES`, `bossSprite0`에 같은 id로 넣는다.
 - 보스 선택 기능: `won`·`finish`·`hp`·`late`(공기가 끝나야 끝나는 전투), `limit`(침하 같은 두 번째 한계), `failTxt`(붕괴 문구), param의 `fv`(계산해서 보여 주는 값).
+- 직업: `JOBS`(능력치), `JOB_SK`(보스마다 직업 전용 공법 하나, 해당 직업만 사용), 대형 수주(`genBig`, 직급 `big` 이상만 수락), 승진 장면(`promoScene`), 레벨 5 진로 상담(`CAREER_TALK`), NPC 직업별 대사(`jl`).
 - 시험 센터: `kind`가 `lab`(실내), `field`(현장), `sea`(해양조사, 3장).
 
 ## 지켜야 할 것
