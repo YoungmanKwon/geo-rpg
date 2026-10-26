@@ -38,6 +38,7 @@ canvas.pix{image-rendering:pixelated;image-rendering:crisp-edges;display:block;w
 .seals span{width:20px;height:20px;border:2px solid #556;border-radius:4px;display:grid;place-items:center;font-size:12px;background:#0a0f22}
 .seals span.on{border-color:var(--gold);background:#3a2e10}
 .seals span.c2{border-style:dashed}
+.seals span.c3{border-style:dotted}
 .hud .menu{margin-left:auto;font-size:17px;min-height:36px;padding:3px 14px}
 .hud .sp{background:var(--hp);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:4px;font-family:"IBM Plex Sans KR"}
 
@@ -410,7 +411,9 @@ const GEAR = [
   {id:'rig', name:'🔩 Anchor drill rig', price:400, desc:'Enables “Ground Anchor” (Earth Pressure Giant)'},
   {id:'vacpump', name:'🌀 Vacuum pump', price:450, desc:'Enables “Vacuum Consolidation” (Swamp Lord)'},
   {id:'jetpump', name:'💉 High-pressure jet pump', price:600, desc:'Enables “Base Jet Grouting (JSP)” (Heave Demon)'},
-  {id:'drill', name:'⛏️ Steel pipe drill', price:700, desc:'Enables “Umbrella Arch Grouting” (Tunnel-Face Dragon)'}];
+  {id:'drill', name:'⛏️ Steel pipe drill', price:700, desc:'Enables “Umbrella Arch Grouting” (Tunnel-Face Dragon)'},
+  {id:'barge', name:'🚢 Work barge', price:800, desc:'Unlocks “Jacket bracing” (Kraken of the Sea Wind)'},
+  {id:'wellpt', name:'🛢️ Relief-well rig', price:600, desc:'Unlocks “Relief wells” (Leviathan of the Deep)'}];
 const KEYITEMS = [
   {id:'ticket', name:'🎫 Ferry ticket to the city', price:300, desc:'Lets you board the ship to Chapter 2 (also needs 5 seals)'},
   {id:'harness', name:'🦺 Fall-arrest harness', price:350, desc:'Required to enter the braced excavation site'},
@@ -418,7 +421,7 @@ const KEYITEMS = [
   {id:'boat', name:'🛶 Rubber boat', price:900, desc:'Lets you cross water. Rumor says something lies beyond the sea to the southeast…'}];
 const owns = id => P.owned.includes(id);
 const itemName = id => (GEAR.find(g => g.id === id) || KEYITEMS.find(g => g.id === id) || {}).name || id;
-const SITE_REQ = {exc:'harness', tunnel:'gas'};
+const SITE_REQ = {exc:'harness', tunnel:'gas', mono:'boat', shaft:'boat'};
 const eq = slot => EQUIP.find(e => e.id === P.equip[slot]);
 const hasPerk = id => P.perks.includes(id);
 
@@ -637,6 +640,8 @@ exc: {
   rand:()=>({cu:Math.round(rr(22,29)), q:Math.round(rr(5,15)), d:+rr(1.5,3).toFixed(1)}),
   fs(s){ const He = Math.max(1, s.H - s.berm), Nc = 5.14*(1 + 0.2*Math.min(He/s.B, 1)); return s.cu*Nc*(1 + 0.15*s.d)/(s.gam*He + s.q); },
   won(s, v){ return s.H >= s.Hf && v >= 1.5; },
+  finish(s){ s.H = s.Hf; },
+  late:s => s.H < s.Hf ? 'Time is up and the excavation isn’t finished…' : '',
   hp(s, v){ return clamp((s.Hf - s.H)/(s.Hf - 4), 0, 1)*0.7 + (v < 1.5 ? 0.3 : 0); },
   target:1.5, maxTurns:8, tgtNote:'(at completion)',
   params:[{k:'H',l:'Excavation depth',u:'m',fn:1},{k:'d',l:'Wall embedment',u:'m',f:1},{k:'q',l:'Surcharge',u:'kPa',f:0},{k:'berm',l:'Berm effect',u:'m',f:1},{k:'cu',l:'Base clay cu',u:'kPa',f:0,h:1},{k:'gam',l:'Unit weight γ',u:'kN/m³',f:0,h:1}],
@@ -666,6 +671,7 @@ tunnel: {
   rand:()=>({C:Math.round(rr(10,14)), cu:Math.round(rr(45,55)), sT:Math.round(rr(50,70))}),
   sv(s){ return s.gam*(s.C + s.Dt/2); },
   fs(s){ const N = (this.sv(s) - s.sT)/s.cu; return N <= 0.1 ? 9 : s.Nk/N; },
+  limit:{k:'set', max:6, l:'Surface settlement', u:'cm', dmg:15, say:'Nearby buildings crack and complaints pour in.'},
   target:1.5, maxTurns:8,
   params:[{k:'C',l:'Cover C',u:'m',f:0},{k:'sT',l:'Face pressure σT',u:'kPa',f:0},{k:'svv',l:'Vertical stress σv',u:'kPa',f:0,fn:1},{k:'set',l:'Surface settlement',u:'cm',f:1},{k:'cu',l:'Ground cu',u:'kPa',f:0,h:1},{k:'Nk',l:'Critical stability number',u:'',f:1,h:1}],
   skills:[
@@ -686,9 +692,153 @@ tunnel: {
     {q:'What if face pressure is too high?',o:['Risk of blow-out, with ground bursting upward','The face collapses more easily','No effect'],a:0,e:'Pressure exceeding the overburden pushes the ground upward.'}],
   qt:['{loc} metro tunnel advance','{loc} sewer tunnel works'],
   lesson:'Face stability comes from face pressure and ground strength, but drainage has a price. Drawdown consolidates the clay above, causing surface settlement and damage to nearby buildings. Managing stability and settlement together is the heart of urban tunneling.'
+},
+scour: {
+  ch:3, name:'Scour Eel', title:'The current that gnaws at bridges', label:'Scour margin', xp:600, color:'#3a8fa8', failTxt:'The pier bed has been dug out and the foundation is exposed! The bridge tilts!',
+  intro:['A giant eel circling the bridge piers of the Nakdong estuary. The faster the current, the deeper it digs under the piers.', 'Pier scour (HEC-18 CSU equation): find the scour depth ys and compare it with the foundation embedment Df. Scour margin = Df ÷ ys, target 1.5.'],
+  init:()=>({a:2, y1:5, V:2.5, K1:1.1, prot:1, Df:5}),
+  rand:()=>({V:+rr(2.3,2.8).toFixed(1), y1:+rr(4.5,5.5).toFixed(1), Df:+rr(4.6,5.4).toFixed(1)}),
+  ys(s, ev){ const V = s.V + (ev && ev.dv || 0), y = s.y1 + (ev && ev.dy || 0), Fr = V/Math.sqrt(GW*y); return 2*s.K1*1.1*s.a*Math.pow(y/s.a, 0.35)*Math.pow(Fr, 0.43)*s.prot; },
+  fs(s, ev){ return s.Df/this.ys(s, ev); },
+  target:1.5, maxTurns:8,
+  params:[{k:'a',l:'Pier width a',u:'m',f:1},{k:'Df',l:'Foundation embedment Df',u:'m',f:1},{k:'K1',l:'Pier shape factor K₁',u:'',f:1},{k:'prot',l:'Protection factor',u:'',f:2},{k:'ysv',l:'Scour depth ys',u:'m',h:1,fv:(s,B)=>B.ys(s).toFixed(2)},{k:'V',l:'Flow velocity V',u:'m/s',f:2,h:1},{k:'y1',l:'Flow depth y₁',u:'m',f:1,h:1}],
+  skills:[
+    {id:'riprap',name:'Riprap armour',tag:'reinf',cost:3,desc:'Lay large stones around the pier to cut scour (protection factor −0.2)',apply:(s,m)=>{s.prot=Math.max(0.5,+(s.prot-0.2*m).toFixed(3));}},
+    {id:'nose',name:'Streamlined pier nose',tag:'geom',cost:3,once:true,desc:'Sharpen the square front of the pier (K₁ 1.1 → 0.9, once)',apply:s=>{s.K1=0.9;}},
+    {id:'deep',name:'Deeper foundation',tag:'reinf',cost:4,desc:'Add piles to take the foundation 2 m deeper',apply:(s,m)=>{s.Df=+(s.Df+2*m).toFixed(1);}},
+    {id:'spur',name:'Upstream spur dikes',tag:'geom',cost:3,desc:'Place spur dikes upstream to cut the flow velocity at the pier by 15%',apply:(s,m)=>{s.V=+(s.V*(1-0.15*m)).toFixed(2);}},
+    {id:'collar',name:'Scour collar',tag:'improve',cost:2,once:true,desc:'Fit a disc collar to the pier to block the horseshoe vortex (protection factor ×0.85, once)',apply:s=>{s.prot=+(s.prot*0.85).toFixed(3);}}],
+  events:[
+    {name:'Rainy season',fx:'Velocity +0.3 m/s',say:'Monsoon rain swells the river.',rain:1,apply:s=>{s.V=+(s.V+0.3).toFixed(2);}},
+    {name:'Flood',fx:'Velocity +0.6 m/s, depth +1 m (this turn only)',say:'Flood! Muddy water whips around the pier.',rain:3,shake:0.5,dv:0.6,dy:1},
+    {name:'Sand mining',fx:'Riverbed lowered: embedment −0.8 m',say:'Sand dredged upstream has lowered the riverbed.',apply:s=>{s.Df=Math.max(2,+(s.Df-0.8).toFixed(1));}}],
+  quiz:[
+    {q:'What mainly causes pier scour?',o:['Downflow at the pier front and the horseshoe vortex dig out the bed','River water dissolves the soil','The pier is too heavy'],a:0,e:'The flow hits the pier and turns downward, and a horseshoe-shaped vortex at the bed carries soil away.'},
+    {q:'If the flow gets faster, the scour depth...',o:['gets deeper','gets shallower','It does not change'],a:0,e:'As the Froude number Fr = V/√(gy) grows, ys grows too.'},
+    {q:'Why is the foundation embedment kept deeper than the expected scour depth?',o:['So soil remains under the foundation after scour and keeps its bearing capacity','To save construction cost','To make the pier lighter'],a:0,e:'If scour removes the soil, the foundation is exposed and loses bearing and lateral resistance.'}],
+  qt:['{loc} river bridge scour check','{loc} pier foundation retrofit'],
+  lesson:'A major cause of bridge collapse is scour during floods. Scour depth depends on velocity, depth and pier shape, so we combine measures that reduce the flow, protect the bed and deepen the foundation.'
+},
+rock: {
+  ch:3, name:'Rockfall Gargoyle', title:'The one who wakes the cliffs', label:'Plane failure FS', xp:650, color:'#8c8478', failTxt:'A rock block slid into the sea along the joint! Plane failure!',
+  intro:['A stone monster clinging to the Taejongdae sea cliffs. When the cracks fill with water, it slides the cliff away.', 'Rock plane failure (Hoek & Bray): a block sliding on a joint. Water in the tension crack pushes the block (V), and water on the joint lifts it (U). Target 1.5.'],
+  init:()=>({H:20, pf:55, pp:35, z:6, zw:3, c:25, phi:35, gr:26, T:0, drain:false, cover:false}),
+  rand:()=>({zw:+rr(2,4).toFixed(1), c:Math.round(rr(20,30)), phi:Math.round(rr(33,37))}),
+  parts(s){ const pp = s.pp*RAD, A = (s.H - s.z)/Math.sin(pp), W = 0.5*s.gr*s.H*s.H*((1 - (s.z/s.H)**2)/Math.tan(pp) - 1/Math.tan(s.pf*RAD)); return {A, W, U:0.5*GW*s.zw*A, V:0.5*GW*s.zw*s.zw}; },
+  fs(s, ev){ const kh = ev && ev.kh || 0, pp = s.pp*RAD, {A, W, U, V} = this.parts(s);
+    return (s.c*A + (W*Math.cos(pp) - U - V*Math.sin(pp) - kh*W*Math.sin(pp) + s.T)*Math.tan(s.phi*RAD))/(W*Math.sin(pp) + V*Math.cos(pp) + kh*W*Math.cos(pp)); },
+  target:1.5, maxTurns:8,
+  params:[{k:'H',l:'Cliff height H',u:'m',f:0},{k:'pf',l:'Slope face angle ψf',u:'°',f:0},{k:'pp',l:'Joint dip ψp',u:'°',f:0},{k:'T',l:'Bolt/anchor force T',u:'kN/m',f:0},{k:'zw',l:'Crack water depth zw',u:'m',f:1,h:1},{k:'c',l:'Joint cohesion c',u:'kPa',f:0,h:1},{k:'phi',l:'Joint friction angle φ',u:'°',f:0,h:1}],
+  skills:[
+    {id:'drain',name:'Horizontal drains',tag:'drain',cost:2,desc:'Drain water out of the crack (zw = 0). Later heavy rain also hurts less',apply:s=>{s.zw=0;s.drain=true;}},
+    {id:'bolt',name:'Rock bolts',tag:'reinf',cost:3,desc:'Bolt across the joint to clamp the block down (T +200 kN/m)',apply:(s,m)=>{s.T+=Math.round(200*m);}},
+    {id:'cut',name:'Flatten the slope',tag:'geom',cost:4,once:true,desc:'Trim the cliff top from 55° to 48°. The sliding block gets lighter (once)',apply:s=>{s.pf=48;}},
+    {id:'cover',name:'Shotcrete cover',tag:'improve',cost:1,once:true,desc:'Seal the crack mouth to halve rain inflow (once)',apply:s=>{s.cover=true;}},
+    {id:'anchor',req:'rig',name:'Prestressed anchors',tag:'reinf',cost:5,desc:'Long anchors pull the block firmly into place (T +500 kN/m)',apply:(s,m)=>{s.T+=Math.round(500*m);}}],
+  events:[
+    {name:'Heavy rain',fx:'Crack water +3 m (+1 m with drains, half with surface cover)',say:'Downpour! Rainwater fills the tension crack.',rain:3,apply:s=>{s.zw=Math.min(s.z,+(s.zw+(s.drain?1:3)*(s.cover?0.5:1)).toFixed(1));}},
+    {name:'Earthquake',fx:'kh 0.15 horizontal inertia (this turn only)',say:'Earthquake! The whole cliff shakes.',kh:0.15,shake:1},
+    {name:'Wave erosion',fx:'Joint cohesion c −5 kPa',say:'Heavy waves pound the cliff foot and open the joints.',shake:0.4,apply:s=>{s.c=Math.max(5,s.c-5);}}],
+  quiz:[
+    {q:'What happens when the tension crack in a rock slope fills with water?',o:['Crack water pushes the block and uplift on the joint reduces friction, so FS drops','Water holds the block and FS rises','No effect at all'],a:0,e:'V increases the sliding force, and U reduces the force pressing on the joint.'},
+    {q:'For plane failure, the joint dip ψp must be...',o:['flatter than the slope face and steeper than the joint friction angle','steeper than the slope face','exactly 0°'],a:0,e:'The joint must daylight in the slope face (ψp < ψf) and be steeper than the friction angle (ψp > φ) to slide.'},
+    {q:'If rock bolts are installed normal to the joint...',o:['the normal force on the joint rises, adding friction (T·tanφ)','the block gets lighter','the water drains'],a:0,e:'The bolt tension becomes normal force and adds frictional resistance.'}],
+  qt:['{loc} coastal cliff rockfall protection','{loc} rock slope stabilisation'],
+  lesson:'In rock slopes the weakness is the joints, not the soil. Investigate joint orientation, friction and crack water; drainage and rock bolts are the most effective pair.'
+},
+quay: {
+  ch:3, name:'Caisson Crab', title:'The claw that tips quay walls', label:'Overturning FS', xp:700, color:'#c0603a', failTxt:'The caisson toppled toward the sea! Quay wall overturning!',
+  intro:['A giant crab of the North Port wharf. Every ebb tide it tries to tip the caisson seaward with its claws.', 'Overturning check of a gravity caisson quay wall: resisting moment about the toe (submerged weight W′ × B/2) ÷ overturning moment (earth pressure + surcharge + residual water pressure). Target is the port design standard (normal) 1.2.'],
+  init:()=>({B:8, Hc:18, h:15, gc:20, phi:35, ge:11, q:20, dh:2.3, cap:0, drain:false}),
+  rand:()=>({dh:+rr(2,2.6).toFixed(1), q:Math.round(rr(15,25)), phi:Math.round(rr(33,37))}),
+  mom(s, ev){ const kh = ev && ev.kh || 0, Ka = (1-Math.sin(s.phi*RAD))/(1+Math.sin(s.phi*RAD)), W = s.B*(s.gc*s.Hc - GW*s.h) + s.cap;
+    const Mo = 0.5*Ka*s.ge*s.Hc**3/3 + Ka*s.q*s.Hc**2/2 + GW*s.dh*s.h*s.h/2 + kh*(s.gc*s.B*s.Hc + s.cap)*s.Hc/2;
+    return {Mr:W*s.B/2, Mo}; },
+  fs(s, ev){ const m = this.mom(s, ev); return m.Mr/m.Mo; },
+  target:1.2, maxTurns:8,
+  params:[{k:'B',l:'Caisson width B',u:'m',f:1},{k:'Hc',l:'Caisson height Hc',u:'m',f:0},{k:'gc',l:'Unit weight with fill γc',u:'kN/m³',f:0},{k:'q',l:'Surcharge q',u:'kPa',f:0},{k:'cap',l:'Added top weight',u:'kN/m',f:0},{k:'phi',l:'Backfill φ′',u:'°',f:0,h:1},{k:'dh',l:'Residual water level Δh',u:'m',f:1,h:1}],
+  skills:[
+    {id:'fill',name:'Heavy caisson fill',tag:'improve',cost:3,once:true,desc:'Fill the caisson with heavy slag (γc 20 → 22, once)',apply:s=>{s.gc=22;}},
+    {id:'light',name:'Rubble backfill',tag:'improve',cost:4,once:true,desc:'Replace the backfill with high-friction rubble to cut earth pressure (φ′ 40°, γe 10, once)',apply:s=>{s.phi=40;s.ge=10;}},
+    {id:'relief',name:'Residual-water drains',tag:'drain',cost:2,desc:'Let water behind the wall drain to the sea faster (Δh −1 m). Later ebb tides hurt less',apply:(s,m)=>{s.dh=Math.max(0.3,+(s.dh-m).toFixed(2));s.drain=true;}},
+    {id:'widen',name:'Widen the caisson',tag:'geom',cost:5,desc:'Caisson width +1.5 m (resisting moment grows with B²)',apply:(s,m)=>{s.B=+(s.B+1.5*m).toFixed(2);}},
+    {id:'cap',name:'Bigger concrete cap',tag:'geom',cost:3,desc:'Enlarge the cap concrete to add weight (+250 kN/m)',apply:(s,m)=>{s.cap+=Math.round(250*m);}}],
+  events:[
+    {name:'Spring-tide rapid ebb',fx:'Residual head +0.8 m (+0.2 m with drains)',say:'Spring ebb! The sea has dropped but the water behind the wall stays put.',rain:1,apply:s=>{s.dh=+(s.dh+(s.drain?0.2:0.8)).toFixed(2);}},
+    {name:'Giant crane',fx:'Surcharge +15 kPa',say:'A huge container crane rolls onto the quay.',shake:0.5,apply:s=>{s.q+=15;}},
+    {name:'Earthquake',fx:'kh 0.06 inertia (this turn only)',say:'Earthquake! The caisson rocks back and forth.',kh:0.06,shake:1}],
+  quiz:[
+    {q:'What is residual water pressure on a quay wall?',o:['Pressure from the head difference when the sea drops fast but the water behind the wall drops slowly','The force of waves hitting the wall','The weight of rainwater'],a:0,e:'At ebb tide, water in the backfill cannot drain in time and pushes the wall seaward.'},
+    {q:'Which weight is used for the overturning resistance of a caisson in water?',o:['Submerged weight (minus buoyancy)','Weight in air','0'],a:0,e:'The submerged part is lighter by its buoyancy.'},
+    {q:'If the caisson width B increases, the resisting moment...',o:['grows with B²','shrinks in proportion to 1/B','It does not change'],a:0,e:'The weight W′ grows with B and so does the lever arm B/2.'}],
+  qt:['{loc} quay wall retrofit','{loc} container terminal expansion'],
+  lesson:'A gravity quay wall stands by its weight. Under water it loses weight to buoyancy, and the residual water pressure from the tides is larger than you think. Check drainage, earth-pressure relief and added weight together.'
+},
+mono: {
+  ch:3, name:'Kraken of the Sea Wind', title:'The one who shakes pillars in the sea', label:'Lateral FS', xp:750, color:'#5a4fa8', failTxt:'The monopile tilted and the wind turbine fell! Lateral failure!',
+  intro:['A kraken in the Cheongsapo offshore wind farm. It wraps its tentacles around the monopiles and shakes them.', 'Broms method (sand, free head, short rigid pile): ultimate lateral resistance Hu = 0.5·γ′·D·L³·Kp ÷ (e + L). FS = Hu ÷ H, target 2.0.'],
+  init:()=>({D:6, L:18, e:30, gs:9, phi:33, H:8000, sp:false}),
+  rand:()=>({phi:Math.round(rr(31,35)), H:Math.round(rr(76,84))*100, L:Math.round(rr(17,19))}),
+  hu(s){ const Kp = (1+Math.sin(s.phi*RAD))/(1-Math.sin(s.phi*RAD)); return 0.5*s.gs*s.D*s.L**3*Kp/(s.e + s.L); },
+  fs(s, ev){ return this.hu(s)/(s.H*(ev && ev.hm || 1)); },
+  target:2, maxTurns:8,
+  params:[{k:'D',l:'Pile diameter D',u:'m',f:1},{k:'L',l:'Embedment length L',u:'m',f:1},{k:'e',l:'Load height e',u:'m',f:0},{k:'huv',l:'Ultimate lateral resistance Hu',u:'kN',h:1,fv:(s,B)=>B.hu(s).toFixed(0)},{k:'H',l:'Design lateral load H',u:'kN',f:0,h:1},{k:'phi',l:'Seabed sand φ′',u:'°',f:0,h:1},{k:'gs',l:'Submerged unit weight γ′',u:'kN/m³',f:1,h:1}],
+  skills:[
+    {id:'deep',name:'Extend embedment',tag:'reinf',cost:4,desc:'Drive the pile 2 m deeper (resistance grows almost with L³)',apply:(s,m)=>{s.L=+(s.L+2*m).toFixed(1);}},
+    {id:'dia',name:'Larger-diameter pile',tag:'geom',cost:5,once:true,desc:'Diameter 6 m → 7.5 m (once)',apply:s=>{s.D=7.5;}},
+    {id:'grout',name:'Seabed grouting',tag:'improve',cost:3,desc:'Cement the sand around the pile (φ′ +3°)',apply:(s,m)=>{s.phi=Math.min(42,+(s.phi+3*m).toFixed(1));}},
+    {id:'jacket',req:'barge',name:'Jacket bracing',tag:'geom',cost:4,once:true,desc:'Use the work barge to add a jacket and lower the load point by 8 m (once)',apply:s=>{s.e=Math.max(10,s.e-8);}},
+    {id:'scourp',name:'Scour-protection rock',tag:'reinf',cost:2,once:true,desc:'Lay rock around the pile to stop scour (once)',apply:s=>{s.sp=true;}}],
+  events:[
+    {name:'Swell',fx:'Lateral load +600 kN',say:'A big swell rolls in from the open sea.',shake:0.4,apply:s=>{s.H+=600;}},
+    {name:'Scour',fx:'Embedment −1.5 m (none with scour-protection rock)',say:'Tidal currents sweep sand from the pile base.',apply:s=>{ if (!s.sp) s.L=Math.max(8,+(s.L-1.5).toFixed(1)); }},
+    {name:'Typhoon',fx:'Lateral load ×1.4 (this turn only)',say:'A typhoon hits! Wind and waves swing the pile.',rain:3,shake:1,hm:1.4}],
+  quiz:[
+    {q:'For a short Broms pile, if the embedment L increases, the ultimate lateral resistance...',o:['rises sharply, almost with L³','It does not change','shrinks'],a:0,e:'Hu = 0.5γ′DL³Kp/(e + L), so L has the biggest effect.'},
+    {q:'If scour forms around an offshore pile...',o:['the embedment shortens and lateral resistance drops sharply','resistance increases','no effect'],a:0,e:'Scour removes the soil holding the pile, which is the same as shortening L.'},
+    {q:'What is the passive earth pressure coefficient Kp for φ′ = 30°?',o:['3','1/3','1'],a:0,e:'Kp = (1 + sinφ′)/(1 − sinφ′) = 1.5/0.5 = 3.'}],
+  qt:['{loc} offshore wind foundation check','{loc} offshore mooring pile retrofit'],
+  lesson:'For piles at sea, lateral loads from wind and waves are scarier than vertical loads. Design the embedment, diameter, load height and scour protection together.'
+},
+shaft: {
+  ch:3, name:'Leviathan of the Deep', title:'The one who stalks the undersea tunnel', label:'Base uplift FS', xp:900, color:'#2a5a8a',
+  intro:['A Leviathan asleep in the confined aquifer under the Gadeok undersea-tunnel shaft. The thinner the clay at the shaft base, the harder it pushes up from below.', 'Shaft base uplift check: FS = (γt·D + γw·h_in) ÷ (γw·hp). Win if FS ≥ 1.2 when excavation is finished and the expected nearby settlement from pressure relief is 5 cm or less!'],
+  init:()=>({D0:14, E:0, Ef:6, plug:0, gam:18, hp:20, hin:0, dd:0, set:0}),
+  rand:()=>({hp:Math.round(rr(19,21)), gam:+rr(17.5,18.5).toFixed(1)}),
+  sett(dd){ return dd <= 0 ? 0 : +(100*0.3*4/2.4*Math.log10((60 + GW*dd)/60)).toFixed(2); },
+  fs(s, ev){ const D = s.D0 - s.E + s.plug, hp = s.hp + (ev && ev.tide || 0); return (s.gam*D + GW*s.hin)/(GW*hp); },
+  finish(s){ s.E = s.Ef; },
+  won(s, v){ return s.E >= s.Ef && v >= 1.2 && s.set <= 5; },
+  hp(s, v){ return clamp((s.Ef - s.E)/s.Ef, 0, 1)*0.6 + (v < 1.2 ? 0.25 : 0) + (s.set > 5 ? 0.15 : 0); },
+  limit:{k:'set', max:5, l:'Expected nearby settlement', u:'cm', dmg:15, say:'Port facilities crack and complaints pour in.'},
+  late:s => s.E < s.Ef ? 'Time ran out before the shaft excavation was finished…' : '',
+  failTxt:'The shaft base burst and sand and seawater gushed up! Base uplift!',
+  target:1.2, maxTurns:8, tgtNote:'(at completion)',
+  params:[{k:'E',l:'Excavation advances',u:'m',fv:s=>`${s.E} / ${s.Ef}`},{k:'Dv',l:'Base clay thickness D',u:'m',fv:s=>(s.D0 - s.E + s.plug).toFixed(1)},{k:'hin',l:'Water inside h_in',u:'m',f:1},{k:'set',l:'Expected nearby settlement',u:'cm',f:1},{k:'hp',l:'Artesian head hp',u:'m',f:1,h:1},{k:'gam',l:'Clay γt',u:'kN/m³',f:1,h:1}],
+  skills:[
+    {id:'relief',req:'wellpt',name:'Relief wells',tag:'drain',cost:3,desc:'Pump the confined water to cut the artesian head by 4 m. But the nearby water table also drops 1 m, causing settlement',apply:(s,m)=>{s.hp=Math.max(4,+(s.hp-4*m).toFixed(1)); s.dd+=1; s.set=BOSSES.shaft.sett(s.dd);}},
+    {id:'cutoff',name:'Deeper cut-off wall',tag:'reinf',cost:5,once:true,desc:'Drive the cut-off wall deeper to cut the artesian head inside the shaft by 3 m only. The outside water level stays (once)',apply:s=>{s.hp=Math.max(4,s.hp-3);}},
+    {id:'grout',name:'Base grouting',tag:'improve',cost:4,desc:'Solidify the top of the sand below the base (+2 m of clay thickness)',apply:(s,m)=>{s.plug=+(s.plug+2*m).toFixed(1);}},
+    {id:'wet',name:'Wet excavation',tag:'geom',cost:3,once:true,desc:'Dig with 8 m of water kept in the shaft. Its weight holds the base down (once)',apply:s=>{s.hin=8;}},
+    {id:'rech',name:'Artificial recharge',tag:'drain',cost:2,desc:'Recharge water back into the ground to restore the water table by 1 m (less expected settlement)',apply:(s,m)=>{s.dd=Math.max(0,+(s.dd-m).toFixed(2)); s.set=BOSSES.shaft.sett(s.dd);}}],
+  events:[
+    {name:'Excavation advances',fx:'Excavation +1.5 m',say:'The excavator digs 1.5 m deeper. The base clay gets thinner.',shake:0.5,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'Excavation advances',fx:'Excavation +1.5 m',say:'Excavation continues. 1.5 m more.',shake:0.5,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'Spring high tide',fx:'Artesian head +2 m (this turn only)',say:'Spring high tide! The sea rises and so does the artesian head.',rain:1,tide:2},
+    {name:'Excavation advances',fx:'Excavation +1.5 m',say:'The excavator digs 1.5 m deeper.',shake:0.5,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'Continuous pumping',fx:'With relief wells, outside water level −0.5 m more',say:'The relief-well pumps never stop. Groundwater keeps draining from the area.',apply:s=>{ if (s.dd > 0){ s.dd+=0.5; s.set=BOSSES.shaft.sett(s.dd); } }},
+    {name:'Final excavation',fx:'Excavation +1.5 m',say:'Final excavation! The floor heaves.',shake:1,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'Spring high tide',fx:'Artesian head +2 m (this turn only)',say:'Spring high tide again. The Leviathan pounds on the base.',rain:1,shake:0.6,tide:2},
+    {name:'Monitoring',fx:'No change',say:'The Leviathan catches its breath. The instruments are quiet.'}],
+  quiz:[
+    {q:'Why does a shaft base heave when a confined aquifer lies below it?',o:['The uplift from the confined water exceeds the weight of the clay above','The clay freezes','The shaft walls are too heavy'],a:0,e:'If the clay weight γt·D cannot beat the water pressure γw·hp below, the base bursts.'},
+    {q:'What is the side effect of lowering the artesian head with relief wells?',o:['The nearby water table drops and soft clay consolidates and settles','The seawater freezes','There is none'],a:0,e:'Lower water table → higher effective stress → consolidation settlement. Same principle as the Tunnel Dragon in Chapter 2.'},
+    {q:'Why does wet excavation help against base uplift?',o:['The weight of water in the shaft presses the base against the uplift','The soil gets lighter','Excavation gets faster'],a:0,e:'The inside water γw·h_in is added on the resisting side.'}],
+  qt:['{loc} undersea tunnel shaft excavation','{loc} coastal pumping station shaft'],
+  lesson:'A deep shaft base is a tug of war between the confined water below and the clay above. Pressure relief is the fastest fix but costs nearby settlement. Mixing cut-off, grouting, wet excavation and recharge to control both stability and settlement is the undersea tunnel engineer’s job.'
 }};
-const ORDER = ['slope','piping','wall','liq','consol','found','pile','exc','tunnel'];
-const CH1 = ORDER.slice(0,5), CH2 = ORDER.slice(5);
+const ORDER = ['slope','piping','wall','liq','consol','found','pile','exc','tunnel','scour','rock','quay','mono','shaft'];
+const CH1 = ORDER.slice(0,5), CH2 = ORDER.slice(5,9), CH3 = ORDER.slice(9);
 const ALLQUIZ = ORDER.flatMap(k => BOSSES[k].quiz);
 /* 현장 조사 종류: 조사마다 드러나는 지반정수와 예상 효과가 보이는 공법이 다르다 */
 const SURVEYS = {
@@ -700,7 +850,12 @@ const SURVEYS = {
   found:[{id:'plt',name:'Plate load test',cost:2,rv:['phi','c','qu'],desc:'Ground strength and ultimate bearing'},{id:'well',name:'Water level monitoring',cost:1,rv:['dw'],desc:'Water table below footing'}],
   pile:[{id:'load',name:'Pile load test',cost:2,rv:['qul'],desc:'Pile ultimate capacity'},{id:'nsf',name:'Pore pressure & settlement monitoring',cost:2,rv:['beta','qn'],desc:'Magnitude of downdrag'}],
   exc:[{id:'vane',name:'Vane shear test',cost:2,rv:['cu'],desc:'Undrained strength of base clay'},{id:'plan',name:'Monitoring & construction plan review',cost:1,rv:['gam'],desc:'Load conditions behind the wall'}],
-  tunnel:[{id:'probe',name:'Horizontal probe drilling',cost:2,rv:['cu'],desc:'Ground strength ahead of the face'},{id:'face',name:'Face observation & mapping',cost:1,rv:['Nk'],desc:'Face stand-up (critical stability number)'}]};
+  tunnel:[{id:'probe',name:'Horizontal probe drilling',cost:2,rv:['cu'],desc:'Ground strength ahead of the face'},{id:'face',name:'Face observation & mapping',cost:1,rv:['Nk'],desc:'Face stand-up (critical stability number)'}],
+  scour:[{id:'flow',name:'Velocity & depth survey (ADCP)',cost:2,rv:['V','y1','ysv'],desc:'Velocity and depth in front of the pier'},{id:'bed',name:'Riverbed survey',cost:1,rv:[],desc:'Riverbed level changes and protection condition'}],
+  rock:[{id:'joint',name:'Joint survey & tilt test',cost:2,rv:['c','phi'],desc:'Joint cohesion and friction angle'},{id:'crack',name:'Crack water monitoring',cost:1,rv:['zw'],desc:'Water level in the tension crack'}],
+  quay:[{id:'back',name:'Backfill sample test',cost:2,rv:['phi'],desc:'φ′ of the backfill'},{id:'tide',name:'Residual water monitoring',cost:1,rv:['dh'],desc:'Water level difference between the backfill and the sea'}],
+  mono:[{id:'scpt',name:'Offshore cone penetration test',cost:2,rv:['phi','gs','huv'],desc:'φ′ and γ′ of the seabed sand'},{id:'met',name:'Wave & wind monitoring',cost:1,rv:['H'],desc:'Design lateral load'}],
+  shaft:[{id:'piez',name:'Artesian head measurement',cost:2,rv:['hp'],desc:'Artesian head in the sand layer'},{id:'bore',name:'Boring & consolidation test',cost:1,rv:['gam'],desc:'Unit weight of the base clay'}]};
 const NEEDS = {
   slope:{nail:'bore', cut:'bore', drain:'piezo', cover:'piezo', trap:'bore'},
   piping:{deepen:'bore', filter:'bore', pump:'perm', grout:'perm', trap:'bore'},
@@ -710,7 +865,12 @@ const NEEDS = {
   found:{widen:'plt', deep:'plt', replace:'plt', grout:'plt', dewater:'well', trap:'plt'},
   pile:{deep:'load', dia:'load', group:'load', coat:'nsf', precon:'nsf', trap:'load'},
   exc:{wall:'vane', jet:'vane', clear:'plan', berm:'plan', trap:'plan'},
-  tunnel:{epb:'probe', fore:'probe', dew:'probe', bolt:'face', ring:'face', trap:'probe'}};
+  tunnel:{epb:'probe', fore:'probe', dew:'probe', bolt:'face', ring:'face', trap:'probe'},
+  scour:{riprap:'bed', nose:'flow', deep:'flow', spur:'flow', collar:'bed', trap:'bed'},
+  rock:{drain:'crack', cover:'crack', bolt:'joint', cut:'joint', anchor:'joint', trap:'joint'},
+  quay:{fill:'back', light:'back', relief:'tide', widen:'back', cap:'back', trap:'back'},
+  mono:{deep:'scpt', dia:'scpt', grout:'scpt', jacket:'met', scourp:'met', trap:'scpt'},
+  shaft:{relief:'piez', cutoff:'piez', grout:['piez','bore'], wet:'piez', rech:'piez', trap:'piez'}};
 /* 유혹의 선택지: 예산은 늘지만 안전율을 떨어뜨린다 */
 const TRAPS = {
   slope:{name:'Haul road on slope crest', desc:'Build a construction road on top of the slope. 15 kPa load on the crest', apply:s=>{s.q=(s.q||0)+15;}},
@@ -721,11 +881,17 @@ const TRAPS = {
   found:{name:'Shallower footing', desc:'Reduce excavation. Embedment −0.4 m', apply:s=>{s.Df=Math.max(0.3,s.Df-0.4);}},
   pile:{name:'Shorter piles', desc:'Save pile material. Embedment in sand −1.5 m', apply:s=>{s.Ls=Math.max(1,s.Ls-1.5);}},
   exc:{name:'Equipment behind wall', desc:'Park excavators right behind the retaining wall. Surcharge +20 kPa', apply:s=>{s.q+=20;}},
-  tunnel:{name:'Lower face pressure', desc:'Speed up advance to save time. Face pressure −30 kPa', apply:s=>{s.sT=Math.max(0,s.sT-30);}}};
+  tunnel:{name:'Lower face pressure', desc:'Speed up advance to save time. Face pressure −30 kPa', apply:s=>{s.sT=Math.max(0,s.sT-30);}},
+  scour:{name:'Permit sand mining near the pier', desc:'Permit sand mining near the pier for income. Embedment −1 m', apply:s=>{s.Df=Math.max(2,+(s.Df-1).toFixed(1));}},
+  rock:{name:'Blast excavation', desc:'Rush the cliff trimming with blasting. Joint cohesion −8 kPa', apply:s=>{s.c=Math.max(5,s.c-8);}},
+  quay:{name:'Dredged-soil fill', desc:'Swap the caisson fill for cheap dredged soil. γc −1.5 kN/m³', apply:s=>{s.gc=+(s.gc-1.5).toFixed(1);}},
+  mono:{name:'Shorter driving', desc:'Save driving time. Embedment −2 m', apply:s=>{s.L=Math.max(8,+(s.L-2).toFixed(1));}},
+  shaft:{name:'Over-pumping relief wells', desc:'Run the relief wells flat out to save time. Artesian head −3 m, outside water level −2 m', apply:s=>{s.hp=Math.max(4,s.hp-3); s.dd+=2; s.set=BOSSES.shaft.sett(s.dd);}}};
 for (const k of ORDER){ const t = TRAPS[k]; BOSSES[k].skills.push({id:'trap', trap:true, once:true, cost:0, gain:3, tag:'cut', name:'💸 ' + t.name, desc:t.desc + ' (budget +3 M$)', apply:t.apply}); }
 const SV_TEST = {
   slope:{bore:'ds', piezo:'pump'}, piping:{bore:'gs', perm:'perm'}, wall:{sample:'ds', well:'pump'}, liq:{spt:'spt', well:'pump'},
-  consol:{oedo:'cc', plate:'plt'}, found:{plt:'plt', well:'pump'}, pile:{load:'plt', nsf:'cpt'}, exc:{vane:'vane', plan:'sand'}, tunnel:{probe:'cpt', face:'pi'}};
+  consol:{oedo:'cc', plate:'plt'}, found:{plt:'plt', well:'pump'}, pile:{load:'plt', nsf:'cpt'}, exc:{vane:'vane', plan:'sand'}, tunnel:{probe:'cpt', face:'pi'},
+  scour:{flow:'adcp', bed:'adcp'}, rock:{joint:'tilt', crack:'piez'}, quay:{back:'ds', tide:'piez'}, mono:{scpt:'cpt', met:'adcp'}, shaft:{piez:'piez', bore:'cc'}};
 const svTest = v => TESTS.find(t => t.id === (SV_TEST[BT.id]||{})[v.id]);
 const svLearned = v => { const t = svTest(v); return !t || (P.tests[t.id]||0) > 0; };
 function quizTest(T){ return new Promise(res => runTest(T, null, res)); }
@@ -886,6 +1052,9 @@ const NPC_LOOK = {
   p:{head:'none', hair:'bald', hairc:'#3a2a20', glasses:true, outfit:'suit', vest:'#4a5a8a', tie:'#f2c14e', acc:'tube'},
   u:{head:'bandana', hat:'#c0392b', beard:true, hairc:'#2a2018', outfit:'overalls', vest:'#7a5530', shirt:'#2f6fb5', wide:true, acc:'megaphone', skin:'#d9a479'},
   n:{head:'lamp', hat:'#3b8fd8', brim:'#2a6db0', outfit:'jacket', vest:'#2a3550', acc:'detector', brows:'#1b1410'},
+  i:{head:'helmet', hat:'#f4f6fa', brim:'#c9ced6', stripe:'#1f6f8b', outfit:'jacket', vest:'#1f6f8b', acc:'clipboard', glasses:true},
+  j:{head:'cap', hat:'#2a3550', brim:'#1b2233', beard:true, hairc:'#d9d9d9', outfit:'jacket', vest:'#2a3550', acc:'tablet', skin:'#d9a479'},
+  v:{head:'helmet', hat:'#f2c14e', brim:'#c9a227', stripe:'#5a3a7a', hair:'ponytail', hairc:'#2a2018', vest:'#5a3a7a', acc:'detector'},
   g:{head:'none', hair:'bald', hairc:'#5a4030', mustache:true, outfit:'apron', vest:'#e9eef7', apron:'#3a8a5a', wide:true, skin:'#e8b88a'}
 };
 function drawHero(c, x, y, dir, step, scale, job){ drawPerson(c, x, y, LOOK2[job || (P && P.job) || 'student'], dir, step, scale || 1); }
@@ -956,6 +1125,33 @@ function bossSprite0(id){
     R(10,8,44,22,'#7a4fb0'); R(6,14,8,10,'#6a3fa0'); R(50,14,8,10,'#6a3fa0'); R(16,4,6,6,'#9a6fd0'); R(42,4,6,6,'#9a6fd0');
     eye(20,14,'#f2c14e'); eye(40,14,'#f2c14e'); R(22,24,20,4,'#2a1a3a'); for (let i=0;i<5;i++) R(23+i*4,24,2,3,'#fff');
     R(4,30,6,14,'#5a3a80'); R(54,30,6,14,'#5a3a80'); R(14,56,36,6,'#4a3a2a'); break;
+  case 'scour':
+    for (let i=0;i<9;i++){ const x = 8 + i*5.5, y = 44 + Math.sin(i*0.9)*8; ell(x, y, 6, 5.5, i%2 ? '#2f7f96' : '#3a8fa8'); }
+    ell(54, 30, 9, 8, '#3a8fa8'); R(50,34,12,3,'#0b2b3a'); for (let i=0;i<3;i++) R(52+i*3,34,1,2,'#fff');
+    eye(50,25,'#f2c14e'); eye(56,25,'#f2c14e'); R(46,18,4,6,'#2f7f96'); R(44,40,3,3,'#bfe8f2'); R(18,30,2,2,'#bfe8f2'); R(30,56,2,2,'#bfe8f2');
+    for (let i=0;i<5;i++) R(10+i*9,52+Math.sin(i)*3,6,2,'#c9b48a'); break;
+  case 'rock':
+    c.fillStyle = '#6f675c'; c.beginPath(); c.moveTo(4,22); c.lineTo(16,30); c.lineTo(16,40); c.fill(); c.beginPath(); c.moveTo(60,22); c.lineTo(48,30); c.lineTo(48,40); c.fill();
+    R(18,20,28,32,'#8c8478'); R(22,8,20,16,'#9a9286'); R(20,6,4,6,'#7a7266'); R(40,6,4,6,'#7a7266');
+    eye(25,12,'#e5484d'); eye(35,12,'#e5484d'); R(27,20,10,2,'#3a342c'); for (let i=0;i<3;i++) R(28+i*3,20,1,2,'#fff');
+    R(24,28,1,12,'#5a5248'); R(25,38,6,1,'#5a5248'); R(38,30,1,10,'#5a5248');
+    R(18,52,10,10,'#7a7266'); R(36,52,10,10,'#7a7266'); R(12,34,6,14,'#7a7266'); R(46,34,6,14,'#7a7266'); break;
+  case 'quay':
+    ell(32,38,24,14,'#c0603a'); ell(32,34,20,10,'#d9774f'); R(14,28,6,2,'#f2a07a'); R(42,30,8,2,'#f2a07a');
+    R(4,14,12,10,'#c0603a'); R(2,10,6,6,'#d9774f'); R(10,10,6,6,'#d9774f'); R(48,14,12,10,'#c0603a'); R(48,10,6,6,'#d9774f'); R(56,10,6,6,'#d9774f');
+    R(12,24,4,8,'#a04f2e'); R(48,24,4,8,'#a04f2e'); R(24,20,2,8,'#a04f2e'); R(38,20,2,8,'#a04f2e');
+    eye(22,16,'#1d2c57'); eye(36,16,'#1d2c57'); R(26,40,12,2,'#5a2a18');
+    for (let i=0;i<3;i++){ R(8+i*5,48+i*3,8,2,'#a04f2e'); R(48-i*5,48+i*3,8,2,'#a04f2e'); } R(14,58,36,4,'#9aa0a8'); break;
+  case 'mono':
+    for (let i=0;i<6;i++){ const x = 8 + i*10; for (let j=0;j<5;j++) ell(x + Math.sin(j + i)*3, 40 + j*5, 3.5 - j*0.4, 3, j%2 ? '#4a3f98' : '#5a4fa8'); }
+    ell(32,24,18,16,'#5a4fa8'); ell(32,20,14,10,'#6a5fc0'); R(22,12,4,3,'#8a80d8');
+    eye(24,22,'#f2c14e'); eye(36,22,'#f2c14e'); R(28,32,8,3,'#2a1f58');
+    R(54,6,4,58,'#c9ced6'); R(52,4,8,4,'#f2c14e'); break;
+  case 'shaft':
+    ell(30,38,28,20,'#2a5a8a'); ell(30,44,22,10,'#9cc7e6'); R(4,22,10,10,'#2a5a8a'); R(50,24,12,8,'#244e78');
+    R(56,16,6,10,'#244e78'); R(58,30,6,10,'#244e78'); for (let i=0;i<5;i++) R(14+i*7,30,4,2,'#16365a');
+    eye(14,30,'#3ccf91'); eye(24,30,'#3ccf91'); R(10,40,18,3,'#0b1f33'); for (let i=0;i<4;i++) R(11+i*4,40,2,3,'#fff');
+    R(28,10,3,10,'#bfe8f2'); R(26,8,3,3,'#bfe8f2'); R(31,6,3,3,'#bfe8f2'); R(8,58,48,4,'#16365a'); break;
   }
   return cv;
 }
@@ -1087,7 +1283,7 @@ function renderHud(){
    <span class="stat">XP <span class="bar" style="width:70px"><i style="width:${P.lv>=MAXLV?100:clamp((P.xp-prev)/(need-prev),0,1)*100}%;background:var(--xp)"></i></span></span>
    <span class="stat">🏗${BT ? 'Project budget' : 'Battle project budget'} <b style="color:var(--mp)">${BT ? BT.budget + '/' + BT.bud0 + ' M$' : maxBud() + ' M$'}</b></span>
    <span class="stat" title="Pocket money: buy gear at the shop">💰Pocket <b style="color:var(--gold)">${P.gold} k$</b> ☕<b>${P.items.coffee}</b> 📄<b>${P.items.fund}</b></span>
-   <span class="seals">${ORDER.map((k,i) => `<span class="${P.cleared.includes(k)?'on':''} ${i>=5?'c2':''}" title="${BOSSES[k].name}">${P.cleared.includes(k)?'★':'·'}</span>`).join('')}</span>
+   <span class="seals">${ORDER.map((k,i) => `<span class="${P.cleared.includes(k)?'on':''} ${i>=9?'c3':i>=5?'c2':''}" title="${BOSSES[k].name}">${P.cleared.includes(k)?'★':'·'}</span>`).join('')}</span>
    ${BT ? '' : `<button class="btn sm menu" id="btnMenu">Menu${alert ? '<span class="sp">!</span>' : ''}</button>`}`;
   const m = $('btnMenu'); if (m) m.onclick = () => openMenu();
 }
@@ -1118,7 +1314,7 @@ const MAPS = [
 "^...k##.##.##.##.ck....^",
 "^...k##.##.##.##..k.p..^",
 "^...kkkkkkkk7kkkkkk....^",
-"^..........k......T....^",
+"^..........k......T...)^",
 "~~~~~~~~~~~b~~~~~~~~~~~~",
 "~~~~~~~~~~~b~~~~~~~~~~~~",
 "^..g..u....k.....^^^^^^^",
@@ -1126,7 +1322,23 @@ const MAPS = [
 "^..H.......kkkkkkkk9^^^^",
 "^..n....q..k.......^^^^^",
 "^<......c..k....T..^^^^^",
-"^^^^^^^^^^^^^^^^^^^^^^^^"], inn:[3,11]}
+"^^^^^^^^^^^^^^^^^^^^^^^^"], inn:[3,11]},
+ {name:'Chapter 3 · Port of Busan', tiles:[
+"^^^^^^^^^^^^^^^^^^^^^^^^",
+"~~~~~^^..T....^^^^^T..^^",
+"~~~~~..=..O..i....T....^",
+"~~~~~..=.kkkkkkkkkkkk..T",
+"~~Abb===.k.##.H.##.g.k..",
+"~~~~~..=.k.##.....##.k..",
+"~~~~~..=.k..v..q...j.k..",
+"~~~~~.(=.kkkkkkkkkkkkk..",
+"~~~~~~~~~kkkkkkkkkkk=c~~",
+"~~~~~~~~~~~C~~~~~~~~b~~~",
+"~~~~~~~~~~~~~~~~~~~~b~D~",
+"~~~~~~~~~~~~~~~^^..=..~~",
+"~~~~~~~~~~~~~~~^^.B..^~~",
+"~~~E~~~~~~~~~~~^^^^^^^~~",
+"~~~~~~~~~~~~~~~~~~~~~~~~"], inn:[14,4]}
 ];
 const MW = 24, MH = 15, TS = 16;
 const tile = (x,y) => (y<0||y>=MH||x<0||x>=MW) ? '^' : MAPS[P.map].tiles[y][x];
@@ -1159,7 +1371,8 @@ const NPCS = {
   p:{name:'Mr. Jung (structural PE)', col:'#4a5a8a', hat:'#f2f2f2', lines:[
     'Welcome to the city. Monsters here are much tougher than the ones in the fields.',
     'Foundations need a bearing FS of 3. Widen the footing to lower contact pressure and grow the Nγ term.',
-    'Piles through soft layers get negative skin friction. When clay settles it drags piles down. Bitumen coating is the cure.']},
+    'Piles through soft layers get negative skin friction. When clay settles it drags piles down. Bitumen coating is the cure.',
+    'Solve all four city sites and you can take the boat to Busan from the port at the far east. Ground problems made by the sea and rivers await.']},
   u:{name:'Manager Han (excavation site)', col:'#8a4a3a', hat:'#f2c14e', lines:[
     'The deeper the excavation, the more the floor heaves. The clay heave FS is cu·Nc divided by (γH + q).',
     'That demon advances the excavation every turn. Reinforce early or it all fails at the end.']},
@@ -1167,12 +1380,25 @@ const NPCS = {
     'Judge the tunnel face by stability number N = (σv − σT)/cu. Above 6 the face collapses.',
     'Raise face pressure too much and the ground blows out. In-tunnel drainage stiffens the ground, but drawdown consolidates the clay above and the surface sinks.',
     'Then use artificial recharge to restore the water. Control both stability and settlement — that’s a real tunnel engineer.']},
+  i:{name:'Manager Kang (Port Authority)', col:'#1f6f8b', hat:'#f4f6fa', lines:[
+    'Welcome to the Port of Busan, {n}. Here the sea and the river torment the soil together.',
+    'The Scour Eel lives at the bridge over the Nakdong estuary to the west, and the Caisson Crab at the North Port wharf. They say the Rockfall Gargoyle lives on the Taejongdae cliffs of Yeongdo to the south.',
+    'The offshore wind farm to the east and the Gadeok undersea-tunnel shaft to the southwest can only be reached by boat. Get a rubber boat ready.',
+    'I will only permit entry to the undersea-tunnel shaft once you solve the other four sites.']},
+  j:{name:'Captain Yu (Survey Vessel)', col:'#2a3550', hat:'#f4f6fa', lines:[
+    'At the Ocean Survey Center just above, we teach you to measure flow, joints and artesian head yourself.',
+    'Scour gets deeper the faster and deeper the flow. A single flood can dig meters under a pier.',
+    'When the seabed is swept away, an offshore wind pile loses embedment. Scour and lateral resistance go hand in hand.']},
+  v:{name:'Supervisor Moon (Undersea Tunnel)', col:'#5a3a7a', hat:'#f2c14e', lines:[
+    'Under the shaft base lies a confined sand layer connected to the sea. When the base clay gets thin, the water below pushes it up.',
+    'Relief wells lower the pressure and raise FS, but the nearby water table drops too and the soft clay sinks. Once the wharf cracks, it is over.',
+    'Cut-off walls, base grouting, wet excavation, recharge… mix several moves to control both stability and settlement.']},
   g:{name:'Mr. Choi (supply shop)', col:'#8a5a22', hat:'#e5484d', kind:'shop', menu:'shop'},
   q:{name:'Site request board', kind:'board', menu:'quest'}
 };
-const CHESTS = {'0:22,13':['gold',1000], '0:3,3':['coffee'], '0:21,5':['fund'], '0:2,11':['coffee'], '1:17,3':['gold',300], '1:8,13':['fund']};
+const CHESTS = {'0:22,13':['gold',1000], '0:3,3':['coffee'], '0:21,5':['fund'], '0:2,11':['coffee'], '1:17,3':['gold',300], '1:8,13':['fund'], '2:21,8':['gold',800]};
 const ITEMN = {coffee:'Canned coffee ☕ (HP +40)', fund:'Contingency note 📄 (+5 M$ budget in battle)'};
-const walkable = (x,y) => { const t = tile(x,y); return '.=smbHck123456789<>PXLF'.includes(t) || (t === '~' && P && owns('boat')); };
+const walkable = (x,y) => { const t = tile(x,y); return '.=smbHck123456789ABCDE<>()PXLFO'.includes(t) || (t === '~' && P && owns('boat')); };
 const W = { cv:null, c:null, moving:null, path:[], busy:false, frame:0, pendingTalk:null };
 
 /* ===== 고해상도 타일 (반 픽셀 단위 디테일) ===== */
@@ -1218,7 +1444,10 @@ function drawTile(c, ch, x, y, t){
       c.fillStyle= ch === 'H' ? '#c0392b' : '#2c6fbf'; c.beginPath(); c.moveTo(X+1.5,Y+8); c.lineTo(X+8,Y+2); c.lineTo(X+14.5,Y+8); c.fill();
       for (let i=0;i<3;i++) Q(4+i*3, 5+(i%2), 2, 0.5, 'rgba(0,0,0,.2)');
       Q(7,10,2.5,5,'#6b4a2a'); Q(8.8,12.5,0.5,0.5,'#f2c14e'); Q(4,9.5,2.5,2,'#7fb2d9'); Q(4,9.5,2.5,0.5,'#cfe6f5'); Q(10.5,9.5,2,2,'#7fb2d9'); break;
-    case '>': case '<': Q(0,0,TS,TS, ch === '>' ? '#e3d39a' : '#6aa64e'); Q(0.5,7.5,15,7,'#1b2233'); Q(1,8,14,6,'#7d5528'); Q(1,8,14,1,'#a8783f');
+    case 'A': case 'C': case 'D': case 'E': drawTile(c, '~', x, y, t); break;
+    case 'O': grass(); Q(0.5,6.5,15,9,'#1b2233'); Q(1,7,14,8,'#dfe7ef'); Q(1,5,14,3,'#1f6f8b'); Q(1,5,14,0.5,'#4aa3c9');
+      Q(6,10,4,5,'#6b4a2a'); Q(2.5,9,2.5,2.5,'#7fb2d9'); Q(11,9,2.5,2.5,'#7fb2d9'); Q(7.5,0.5,1,5,'#555'); Q(5,1,6,1,'#3ccf91'); Q(4,2.5,8,0.5,'#3ccf91'); break;
+    case '>': case '<': case '(': case ')': Q(0,0,TS,TS, ch === '>' ? '#e3d39a' : '#6aa64e'); Q(0.5,7.5,15,7,'#1b2233'); Q(1,8,14,6,'#7d5528'); Q(1,8,14,1,'#a8783f');
       Q(3,4,10,4.5,'#e6ddcf'); Q(3,4,10,0.5,'#fff'); Q(4.5,5,1.5,1.5,'#7fb2d9'); Q(7.5,5,1.5,1.5,'#7fb2d9'); Q(7,1,1,3.5,'#555'); Q(8,1,4,2,'#e5484d'); break;
     case 'L': grass(); Q(0.5,4.5,15,11,'#1b2233'); Q(1,5,14,10,'#dfe7ef'); Q(1,3,14,3,'#2c6fbf'); Q(1,3,14,0.5,'#5a93d8');
       Q(6,9,4,6,'#6b4a2a'); Q(2.5,7,2.5,2.5,'#7fb2d9'); Q(11,7,2.5,2.5,'#7fb2d9'); Q(7,0,2,3,'#3ccf91'); Q(6,1.5,4,1,'#3ccf91'); Q(7.5,0.5,1,1,'#bff5df'); break;
@@ -1230,9 +1459,11 @@ function drawTile(c, ch, x, y, t){
   }
 }
 
-function siteState(n){ const id = ORDER[n-1]; const cleared = P.cleared.includes(id); const open = n === 1 || P.cleared.includes(ORDER[n-2]); return {id, cleared, open}; }
+const SITE_CH = '123456789ABCDE', siteN = ch => (ch && ch.length === 1) ? SITE_CH.indexOf(ch) + 1 : 0;
+function siteState(n){ const id = ORDER[n-1], cleared = P.cleared.includes(id);
+  const open = n === 1 || (CH3.includes(id) ? (id !== 'shaft' || CH3.slice(0,4).every(k => P.cleared.includes(k))) : P.cleared.includes(ORDER[n-2])); return {id, cleared, open}; }
 function drawSite(c, x, y, t){
-  const n = +tile(x,y), {id, cleared, open} = siteState(n), X = x*TS, Y = y*TS, B = BOSSES[id];
+  const n = siteN(tile(x,y)), {id, cleared, open} = siteState(n), X = x*TS, Y = y*TS, B = BOSSES[id];
   const bob = Math.sin(t/10 + n) > 0 ? 1 : 0;
   px(c,X+3,Y+2,1,13,'#4a3a2a'); px(c,X+4,Y+2+bob,8,5, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86');
   c.fillStyle = cleared ? '#1f7a54' : open ? B.color : '#55575d'; c.beginPath(); c.arc(X+10,Y+12,4,0,7); c.fill();
@@ -1241,21 +1472,22 @@ function drawSite(c, x, y, t){
 }
 function fillerTile(x, y){
   const cx = Math.max(0, Math.min(MW-1, x)), cy = Math.max(0, Math.min(MH-1, y)), e = MAPS[P.map].tiles[cy][cx];
-  if ('~sb>'.includes(e)) return '~';
+  if ('~sb>)(ACDE'.includes(e)) return '~';
   if (e === '^') return '^';
   if (e === '#') return (Math.abs(x-cx) + Math.abs(y-cy)) > 2 ? 'T' : '#';
   return 'T';
 }
 /* ===== 길안내: 이름표 · 목표 · 미니맵 ===== */
-const PLACE_TAG = {L:'🔬 Soil Lab', F:'🚜 Field Test Center', H:'☕ Site Office', '>':'⛴ Port', '<':'⛴ Port'};
+const PLACE_TAG = {L:'🔬 Soil Lab', F:'🚜 Field Test Center', O:'🌊 Ocean Survey Center', H:'☕ Site Office', '>':'⛴ Port', '<':'⛴ Port', ')':'⛴ Port to Busan', '(':'⛴ Port'};
 const NPC_TAG = {g:'🛒 Supply Shop', q:'📋 Request Board'};
 function findTile(ch){ const T = MAPS[P.map].tiles; for (let y=0;y<T.length;y++){ const x = T[y].indexOf(ch); if (x >= 0) return [x,y]; } return null; }
 function currentGoal(){
-  for (let n=1;n<=9;n++){ const id = ORDER[n-1]; if (P.cleared.includes(id)) continue; const pos = findTile(String(n));
+  for (let n=1;n<=ORDER.length;n++){ const id = ORDER[n-1]; if (P.cleared.includes(id) || !siteState(n).open) continue; const pos = findTile(SITE_CH[n-1]);
     if (!pos) continue; const B = BOSSES[id], need = (typeof SITE_REQ !== 'undefined' && SITE_REQ[id] && !owns(SITE_REQ[id])) ? ` (${itemName(SITE_REQ[id])} required)` : '';
     return {pos, text:`🎯 Next goal: ${B.name}${need}`}; }
   if (P.map === 0 && ORDER.slice(0,5).every(k => P.cleared.includes(k)) && !P.cleared.includes(ORDER[5])){ const pos = findTile('>');
     return {pos, text: owns('ticket') ? '🎯 Next goal: take the ship to the city from the east port' : '🎯 Next goal: buy a 🎫 ferry ticket and go to the east port'}; }
+  if (P.map === 1 && CH2.every(k => P.cleared.includes(k)) && !CH3.every(k => P.cleared.includes(k))) return {pos: findTile(')'), text:'🎯 Next goal: the boat to Busan from the east port'};
   return {pos:null, text:'🎯 All sites cleared! Keep training with Site requests in the Menu'};
 }
 function tagAt(c, x, y, text, col){ (W.tags || (W.tags = [])).push([x, y, text, col]); }
@@ -1270,7 +1502,7 @@ function drawWorldTags(c, x0, y0, x1, y1){
     const ch = tile(x,y);
     if (PLACE_TAG[ch]) tagAt(c, x, y, PLACE_TAG[ch], ch === 'L' ? '#4aa3ff' : ch === 'F' ? '#ff8a1f' : '#f2c14e');
     else if (NPC_TAG[ch]) tagAt(c, x, y, NPC_TAG[ch], '#3ccf91');
-    else if ('123456789'.includes(ch)){ const {id, cleared, open} = siteState(+ch); tagAt(c, x, y, (cleared ? '✓ ' : open ? '⚔ ' : '🔒 ') + BOSSES[id].name, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86'); }
+    else if (siteN(ch)){ const {id, cleared, open} = siteState(siteN(ch)); tagAt(c, x, y, (cleared ? '✓ ' : open ? '⚔ ' : '🔒 ') + BOSSES[id].name, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86'); }
   }
   return goal;
 }
@@ -1316,8 +1548,8 @@ function drawMiniMap(goal){
   const dot = (x, y, col, r) => { c.fillStyle = '#1b2233'; c.beginPath(); c.arc(x*MM + MM/2, y*MM + MM/2, r + 1, 0, 7); c.fill(); c.fillStyle = col; c.beginPath(); c.arc(x*MM + MM/2, y*MM + MM/2, r, 0, 7); c.fill(); };
   for (let y=0;y<MH;y++) for (let x=0;x<MW;x++){ const ch = T[y][x];
     if (ch === 'L') dot(x,y,'#4aa3ff',2.2); else if (ch === 'F') dot(x,y,'#ff8a1f',2.2); else if (ch === 'H') dot(x,y,'#f4f6fa',2);
-    else if (ch === 'g' || ch === 'q') dot(x,y,'#3ccf91',1.8); else if (ch === '>' || ch === '<') dot(x,y,'#c9ced6',1.8);
-    else if ('123456789'.includes(ch)){ const {cleared, open} = siteState(+ch); dot(x,y, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86', 2); } }
+    else if (ch === 'g' || ch === 'q') dot(x,y,'#3ccf91',1.8); else if ('><)('.includes(ch)) dot(x,y,'#c9ced6',1.8); else if (ch === 'O') dot(x,y,'#3fb6c9',2.2);
+    else if (siteN(ch)){ const {cleared, open} = siteState(siteN(ch)); dot(x,y, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86', 2); } }
   if (goal.pos && Math.floor(W.frame/15) % 2){ c.strokeStyle = '#f2c14e'; c.lineWidth = 1.2; c.strokeRect(goal.pos[0]*MM - 1.5, goal.pos[1]*MM - 1.5, MM + 3, MM + 3); }
   dot(P.x, P.y, Math.floor(W.frame/10) % 2 ? '#f2c14e' : '#fff', 2);
 }
@@ -1362,7 +1594,7 @@ function renderWorld(){
     if (x < 0 || y < 0 || x >= MW || y >= MH){ drawTile(c, fillerTile(x, y), x, y, t); continue; }
     const ch = tile(x,y), npc = NPCS[ch];
     drawTile(c, npc ? ('k='.includes(tile(x-1,y)) && 'k='.includes(tile(x+1,y)) ? tile(x-1,y) : '.') : ch, x, y, t);
-    if ('123456789'.includes(ch)) drawSite(c, x, y, t);
+    if (siteN(ch)) drawSite(c, x, y, t);
     if (ch === 'c'){ const opened = P.chests.includes(P.map+':'+x+','+y); drawTile(c, P.map && tile(x+1,y)==='k' ? 'k' : '.', x, y, t);
       const X = x*TS, Y = y*TS; c.fillStyle = '#1b2233'; c.fillRect(X+2.5, Y+(opened?3.5:5.5), 11, opened?11:9.5);
       c.fillStyle = '#8a5a22'; c.fillRect(X+3, Y+7, 10, 7); c.fillStyle = '#a8783f'; c.fillRect(X+3, Y+(opened?4:6), 10, opened?2:3);
@@ -1393,15 +1625,16 @@ function stepTo(dx, dy){
 }
 async function onArrive(){
   const ch = tile(P.x, P.y);
-  if ('123456789'.includes(ch)){ W.path = []; held = null; return enterSite(+ch); }
+  if (siteN(ch)){ W.path = []; held = null; return enterSite(siteN(ch)); }
   if (ch === 'H'){ W.path = []; held = null; W.busy = true; P.hp = maxHp(); save(); renderHud(); await talk(['You had a warm coffee at the site office. HP fully restored and progress saved.'], 'Site office'); W.busy = false; return; }
   if (ch === 'c'){ const k = P.map+':'+P.x+','+P.y; if (!P.chests.includes(k)){ W.path = []; held = null; W.busy = true; P.chests.push(k); const [it, n] = CHESTS[k] || ['coffee'];
       let txt; if (it === 'gold'){ P.gold += n; txt = `The chest held ${n} k$!`; } else { P.items[it]++; txt = `${ITEMN[it]} obtained!`; }
       save(); renderHud(); await talk([txt]); W.busy = false; } return; }
-  if (ch === '>' || ch === '<'){ W.path = []; held = null; return portal(ch); }
+  if ('><)('.includes(ch)){ W.path = []; held = null; return portal(ch); }
   if (ch === 'X'){ W.path = []; held = null; return enterSecret(); }
   if (ch === 'L'){ W.path = []; held = null; return openTests('lab'); }
   if (ch === 'F'){ W.path = []; held = null; return openTests('field'); }
+  if (ch === 'O'){ W.path = []; held = null; return openTests('sea'); }
   if (W.pendingTalk && !W.path.length){ const t = W.pendingTalk; W.pendingTalk = null; return talkNPC(t); }
   if (!W.path.length || true) maybeEncounter(ch);
 }
@@ -1412,9 +1645,14 @@ async function portal(ch){
     if (!owns('ticket')){ await talk(['“You have the seals. But where’s your ticket? Buy a ferry ticket (300 k$) at the Menu shop.”'], 'Port captain'); W.busy = false; return; }
     const k = await ask('Board the ship to the city?', ['Set sail!','Later'], 'Port captain'); hideMsg();
     if (k === 0){ P.map = 1; P.x = 2; P.y = 13; P.dir = 'r'; save(); setMapTag(); if (!P.seen2){ P.seen2 = 1; await talk(['The ship reaches the city port. Beneath the skyscrapers, something stirs underground.', 'This is Chapter 2. Monsters are much stronger, so gear up and build your skills.']); } }
+  } else if (ch === ')'){
+    if (!CH2.every(k => P.cleared.includes(k))){ await talk(['The boat to Busan. The captain says, “Only engineers who solved all four city sites may enter the Port of Busan.”'], 'Port captain'); W.busy = false; return; }
+    const k = await ask('Board the boat to Busan?', ['Set sail!','Later'], 'Port captain'); hideMsg();
+    if (k === 0){ P.map = 2; P.x = 7; P.y = 7; P.dir = 'r'; save(); setMapTag(); if (!P.seen3){ P.seen3 = 1; await talk(['The boat reaches the Port of Busan. In the salty sea wind you can hear rivers and the sea cutting into the soil.', 'Chapter 3 begins here. Let’s solve ground problems made by water and the sea. You can also learn new tests at the Ocean Survey Center up north.']); } }
   } else {
-    const k = await ask('Board the ship back to the fields?', ['Set sail!','Later'], 'Port captain'); hideMsg();
-    if (k === 0){ P.map = 0; P.x = 22; P.y = 9; P.dir = 'l'; save(); setMapTag(); }
+    const back = ch === '(' ? {q:'Board the boat back to the city?', m:1, x:21, y:6} : {q:'Board the ship back to the fields?', m:0, x:22, y:9};
+    const k = await ask(back.q, ['Set sail!','Later'], 'Port captain'); hideMsg();
+    if (k === 0){ P.map = back.m; P.x = back.x; P.y = back.y; P.dir = 'l'; save(); setMapTag(); }
   }
   W.busy = false;
 }
@@ -1428,7 +1666,7 @@ function facingNPC(){ const d = {u:[0,-1], d:[0,1], l:[-1,0], r:[1,0]}[P.dir]; c
 async function enterSite(n){
   const {id, cleared, open} = siteState(n), B = BOSSES[id];
   W.busy = true;
-  if (!open){ await talk([n === 1 ? '“No field-test certificate, no entry. Finish the lab and the field test center first.”' : `Access restricted. First defeat “${BOSSES[ORDER[n-2]].name}” and come back.`], 'Site guard'); W.busy = false; return; }
+  if (!open){ await talk([n === 1 ? '“No field-test certificate, no entry. Finish the lab and the field test center first.”' : (id === 'shaft' ? 'This site is closed. Solve the other four sites in the Port of Busan first.' : `Access restricted. First defeat “${BOSSES[ORDER[n-2]].name}” and come back.`)], 'Site guard'); W.busy = false; return; }
   if (SITE_REQ[id] && !owns(SITE_REQ[id])){ await talk([`“${itemName(SITE_REQ[id])} is required to enter this site. Safety rules.”`, 'Available at Menu → Gear·Shop.'], 'Site safety manager'); W.busy = false; return; }
   if (cleared){ const k = await ask(`${B.name} has already been defeated. Challenge again for practice? (XP·gold 1/4)`, ['Challenge again','Give up']); hideMsg(); if (k !== 0){ W.busy = false; return; } }
   else { for (const l of B.intro) await say(l, B.name); const k = await ask(`${B.name} — fight?`, ['Start battle','Later']); hideMsg(); if (k !== 0){ W.busy = false; return; } }
@@ -1485,10 +1723,20 @@ const TESTS = [
  {id:'pump', kind:'field', name:'Pumping test', icon:'🚰', gen(){ const r1 = rf(5,15,1), r2 = rf(30,60,1), h1 = rf(8,12,2), h2 = +(h1 + rr(0.5,1.5)).toFixed(2), k = rr(1,9)*1e-4, Q = k*Math.PI*(h2*h2 - h1*h1)/Math.log(r2/r1);
    return {html:`Pumping at constant rate from an unconfined aquifer, water levels were measured at two observation wells (above the impermeable base).<table class="dtab"><tr><td>Pumping rate Q</td><td>${fx(Q*1000,3)} L/s</td></tr><tr><td>Well 1: r₁, h₁</td><td>${r1} m, ${h1} m</td></tr><tr><td>Well 2: r₂, h₂</td><td>${r2} m, ${h2} m</td></tr></table>`,
      q:'Permeability k (×10⁻⁴ m/s)', ans:Q*Math.log(r2/r1)/(Math.PI*(h2*h2 - h1*h1))*1e4, tol:0.04, f:'k = Q·ln(r₂/r₁) ÷ [π(h₂² − h₁²)] (Q in m³/s)'}; }}];
+TESTS.push(
+ {id:'adcp', kind:'sea', name:'Velocity & depth survey (ADCP)', icon:'🌊', gen(){ const Bw = Math.round(rr(80,140)), y = rf(3,7,1), Q = Math.round(rr(1.2,3.0)*Bw*y);
+   return {html:`We crossed the river by boat with an ADCP (acoustic Doppler current profiler) and measured the discharge and cross-section.<table class="dtab"><tr><td>Discharge Q</td><td>${Q} m³/s</td></tr><tr><td>Surface width B</td><td>${Bw} m</td></tr><tr><td>Mean depth y</td><td>${y} m</td></tr></table>`,
+     q:'Mean velocity V (m/s)', ans:Q/(Bw*y), tol:0.03, f:'V = Q ÷ (B·y)'}; }},
+ {id:'tilt', kind:'sea', name:'Joint tilt test', icon:'🪨', gen(){ const phi = rr(28,40), tr = [0,1,2].map(() => +(phi + rr(-1.2,1.2)).toFixed(1));
+   return {html:`Two pieces of rock core sharing a joint were stacked, and the plate was slowly tilted until the top piece slid. We measured the angle three times.<table class="dtab"><tr><th>Trial</th><th>Sliding angle</th></tr>${tr.map((a,i) => `<tr><td>${i+1}</td><td>${a}°</td></tr>`).join('')}</table>`,
+     q:'Basic joint friction angle φ<sub>b</sub> (°)', ans:(tr[0] + tr[1] + tr[2])/3, tol:0.7, abs:true, f:'φ<sub>b</sub> = mean sliding angle (for a joint with zero cohesion, tanφ = tan α)'}; }},
+ {id:'piez', kind:'sea', name:'Artesian head measurement', icon:'📏', gen(){ const za = rf(15,25,1), dw = rf(-1.5,3,2);
+   return {html:`A standpipe piezometer was installed down to the confined sand and the water level in the pipe was read. (A negative depth means the water rose above the ground.)<table class="dtab"><tr><td>Depth to top of sand</td><td>${za} m</td></tr><tr><td>Water depth in pipe (from ground)</td><td>${dw} m</td></tr></table>`,
+     q:'Artesian head above the top of sand h<sub>p</sub> (m)', ans:za - dw, tol:0.03, f:'h<sub>p</sub> = depth to top of sand − water depth in pipe'}; }});
 const labDone = k => TESTS.filter(t => t.kind === k).every(t => (P.tests[t.id]||0) > 0);
 const LAB_SV = new Set(['bore','sample','oedo','perm']);
 const passedN = k => TESTS.filter(t => t.kind === k && (P.tests[t.id]||0) > 0).length;
-const STAGE = {lab:{n:'Lab tests certified', seal:'🔬'}, field:{n:'Field tests certified', seal:'🚜'}};
+const STAGE = {lab:{n:'Lab tests certified', seal:'🔬'}, field:{n:'Field tests certified', seal:'🚜'}, sea:{n:'Ocean Survey Certificate', seal:'🌊'}};
 /* ===== 실험 미니게임 정의 ===== */
 const MG = {};   // 손 실험 미니게임은 사용하지 않는다 (절차 퍼즐 → 결과 판정)
 const GRADES = [['S','#f2c14e',1.6],['A','#3ccf91',1.3],['B','#4aa3ff',1],['C','#a9b6cf',0.5],['D','#e5484d',0]];
@@ -1579,8 +1827,8 @@ function runMG(m){
 let labTab = 'test';
 function openTests(kind, tab){
   held = null; W.path = []; const S = labStat(); if (tab) labTab = tab; if (kind !== 'lab' && labTab === 'uscs') labTab = 'test';
-  const list = TESTS.filter(t => t.kind === kind), title = kind === 'lab' ? '🔬 Starting Village Soil Lab' : '🚜 Field Test Center';
-  const n = passedN(kind), need = 4, clr = P.stg[kind];
+  const list = TESTS.filter(t => t.kind === kind), title = kind === 'lab' ? '🔬 Starting Village Soil Lab' : kind === 'sea' ? '🌊 Busan Ocean Survey Center' : '🚜 Field Test Center';
+  const n = passedN(kind), need = Math.min(4, list.length), clr = P.stg[kind];
   const stageBox = clr ? `<p style="color:var(--gold)"><b>★ ${STAGE[kind].n} complete!</b></p>`
     : n >= need ? `<div class="row" style="justify-content:flex-start;margin:8px 0"><button class="btn gold" id="tFinal">★ Take the final exam (3 random problems in a row)</button></div>`
     : `<p class="note">Pass ${need} or more tests to unlock the <b>final exam</b> (now ${n}/${need}).</p>`;
@@ -1601,7 +1849,7 @@ function bindLabHead(kind){
 }
 async function clearStage(kind){
   P.stg[kind] = true; P.gold += 150; const ev = gainXP(60); save(); renderHud(); syncRank();
-  $('modalBody').innerHTML = `<h2>★ ${STAGE[kind].n}!</h2><p>${kind === 'lab' ? 'You received your lab test certificate. You can now describe soil properties in numbers.' : 'You received your field test certificate. Time to head out to real sites!'}</p>
+  $('modalBody').innerHTML = `<h2>★ ${STAGE[kind].n}!</h2><p>${kind === 'sea' ? 'You received the Ocean Survey Certificate. Now you can measure ground problems made by water and the sea yourself.' : kind === 'lab' ? 'You received your lab test certificate. You can now describe soil properties in numbers.' : 'You received your field test certificate. Time to head out to real sites!'}</p>
     <div class="reward"><span>EXP +60</span><span>+150 k$</span>${ev.map(e => `<span>${e}</span>`).join('')}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn gold" id="tOk">Continue</button></div>`;
   $('tOk').onclick = () => { closeModal(); renderHud(); };
@@ -1672,6 +1920,24 @@ const LABX = {
     interp(r){ const h = rr(2,4).toFixed(1), qa = 5.14*r/3; return pick([
       {q:`Undrained shear strength cu = ${r.toFixed(1)} kPa. What is the clay’s consistency?`, o:['Soft (< 25 kPa)','Medium (25–50 kPa)','Stiff (> 50 kPa)'], a: r < 25 ? 0 : r <= 50 ? 1 : 2, why:'cu tells you the consistency directly.'},
       {q:`cu = ${r.toFixed(1)} kPa clay: can you build a fill ${h} m high (≈ ${(19*h).toFixed(0)} kPa) in one go? (allowable ≈ 5.14cu/3)`, o:['Yes','No, staged filling is needed'], a: 19*h <= qa ? 0 : 1, why:`Allowable bearing ≈ ${qa.toFixed(0)} kPa.`}]); }},
+  adcp:{unit:'m/s', dp:2, steps:[
+    {q:'How should the ADCP boat be driven?', o:[OPT('Cross the river slowly at a steady speed', 1), OPT('Pass once at full speed', 0, -0.12, 'The boat was too fast, bottom tracking dropped out, and the discharge came out too small.')]},
+    {q:'How many crossings?', o:[OPT('Measure at least two round trips and average', 1), OPT('Once is enough', 0, 0.08, 'Turbulent fluctuations went straight into the single measurement.')]},
+    {q:'Sensor depth correction?', o:[OPT('Add the sensor’s submerged depth to the water depth', 1), OPT('No correction', 0, 0.1, 'The depth came out too small, so the velocity was overestimated.')]}],
+    interp(r){ const y = +rr(0.3,1.5).toFixed(1), Fr = r/Math.sqrt(GW*y);
+      return {q:`Flow with mean velocity V = ${r.toFixed(2)} m/s passes a riffle ${y} m deep. What is the flow regime? (Fr = V ÷ √(g·y))`, o:['Subcritical (Fr < 1, tranquil flow)','Supercritical (Fr > 1, fast and shallow flow)'], a: Fr < 1 ? 0 : 1, why:`Fr = ${r.toFixed(2)} ÷ √(9.81 × ${y}) = ${Fr.toFixed(2)}. If Fr is above 1 the flow is supercritical; below 1 it is subcritical.`}; }},
+  tilt:{unit:'°', dp:1, steps:[
+    {q:'How should the sample be prepared?', o:[OPT('Fit together two core pieces with the joint intact', 1), OPT('Grind the joint surface smooth', 0, -0.15, 'The roughness was lost and the friction angle came out too small.')]},
+    {q:'How fast should the plate be tilted?', o:[OPT('Slowly and steadily', 1), OPT('Tip it quickly', 0, -0.08, 'The jolt made the block slide early.')]},
+    {q:'How many trials?', o:[OPT('Repeat several times and average', 1), OPT('Just once', 0, 0.06, 'A single value happened to be high.')]}],
+    interp(r){ let psi = Math.round(rr(25,45)); if (Math.abs(psi - r) < 2) psi += psi > r ? 3 : -3;
+      return {q:`A joint with friction angle φ = ${r.toFixed(1)}° dips ${psi}° and daylights in the cliff. With no cohesion or water, this block...`, o:['does not slide','slides'], a: psi < r ? 0 : 1, why:`With no cohesion or water pressure, FS = tanφ ÷ tanψ. The joint dip ${psi}° vs. the friction angle ${r.toFixed(1)}°: ${psi < r ? 'gentler, so it holds' : 'steeper, so it slides'}.`}; }},
+  piez:{unit:'m', dp:2, steps:[
+    {q:'Where should the piezometer screen go?', o:[OPT('Inside the confined sand layer', 1), OPT('In the clay layer above', 0, -0.2, 'It measured the clay pore pressure, so the artesian head came out too small.')]},
+    {q:'What goes above the screen?', o:[OPT('A bentonite seal', 1), OPT('Sand fill', 0, -0.1, 'Water from above leaked in and blurred the head.')]},
+    {q:'When should it be read?', o:[OPT('After the level stabilises, averaging several readings for tides', 1), OPT('Right after installation', 0, -0.15, 'It was read before the water had fully risen.')]}],
+    interp(r){ const D = Math.round(rr(8,16)), fs = 18*D/(GW*r);
+      return {q:`Artesian head h<sub>p</sub> = ${r.toFixed(2)} m. With a clay thickness D = ${D} m (γ<sub>t</sub> 18 kN/m³) below the shaft base, the base is... (criterion FS 1.2)`, o:['Safe (FS ≥ 1.2)','Needs pressure relief or reinforcement (FS < 1.2)'], a: fs >= 1.2 ? 0 : 1, why:`FS = 18 × ${D} ÷ (9.81 × ${r.toFixed(2)}) = ${fs.toFixed(2)}.`}; }},
   pump:{unit:'×10⁻⁴ m/s', dp:2, steps:[
     {q:'Pumping method?', o:[OPT('Constant rate until levels stabilize', 1), OPT('Change the rate frequently', 0, 0.3, 'Not steady state, so the calculation went wrong.')]},
     {q:'Observation well locations?', o:[OPT('Two at different distances from the pumping well', 1), OPT('Two at the same distance', 0, -0.4, 'Couldn’t get k from the head difference between wells.')]}],
@@ -1815,8 +2081,11 @@ function drawPChart(cv, LL, PI){
    ========================================================= */
 const SYM = {beta:'β', z:'z', c:'c′', phi:'φ′', m:'m', q:'q', cover:'Surface protection', dh:'Δh', D:'D', gs:'γ′', grout:'Cutoff curtain', B:'B', H:'H', hw:'h<sub>w</sub>', mu:'μ', T:'T', gam:'γ', drain:'Drains',
   N:'N', wt:'d<sub>w</sub> (water depth)', mul:'CRR multiplier', add:'ΔCRR', load:'Design fill load', pre:'Preload', vac:'Vacuum', pvd:'PVD spacing', mat:'Sand mat', Df:'D<sub>f</sub>', dw:'d<sub>w</sub>', Q:'Q',
-  Ls:'L<sub>s</sub>', qb:'q<sub>b</sub>', fill:'Fill load', coat:'Coating factor', share:'Load share', d:'Embedment d', cu:'c<sub>u</sub>', berm:'Berm effect', sT:'σ<sub>T</sub>', Nk:'N<sub>k</sub>', set:'Surface settlement', gamma:'γ'};
-const HIDE_OF = {slope:{c:'c',phi:'phi',m:'m'}, piping:{gs:'gs'}, wall:{phi:'phi',mu:'mu',hw:'hw'}, liq:{N:'N',wt:'wt',mul:'N',add:'N'}, found:{phi:'phi',c:'c',dw:'dw'}, pile:{beta:'beta',coat:'beta'}, exc:{cu:'cu',gam:'gam'}, tunnel:{cu:'cu',Nk:'Nk'}, consol:{cv:'cv'}};
+  Ls:'L<sub>s</sub>', qb:'q<sub>b</sub>', fill:'Fill load', coat:'Coating factor', share:'Load share', d:'Embedment d', cu:'c<sub>u</sub>', berm:'Berm effect', sT:'σ<sub>T</sub>', Nk:'N<sub>k</sub>', set:'Surface settlement', gamma:'γ',
+  a:'a', y1:'y₁', V:'V', K1:'K₁', prot:'Protection factor', pf:'ψ<sub>f</sub>', pp:'ψ<sub>p</sub>', zw:'z<sub>w</sub>', gr:'γ<sub>r</sub>', Hc:'H<sub>c</sub>', gc:'γ<sub>c</sub>', ge:'γ<sub>e</sub>', cap:'Added top weight',
+  L:'L', e:'e', sp:'Scour-protection rock', E:'Excavation advances', plug:'Treated layer thickness', hp:'h<sub>p</sub>', hin:'Water inside', dd:'Outside water drawdown'};
+const HIDE_OF = {slope:{c:'c',phi:'phi',m:'m'}, piping:{gs:'gs'}, wall:{phi:'phi',mu:'mu',hw:'hw'}, liq:{N:'N',wt:'wt',mul:'N',add:'N'}, found:{phi:'phi',c:'c',dw:'dw'}, pile:{beta:'beta',coat:'beta'}, exc:{cu:'cu',gam:'gam'}, tunnel:{cu:'cu',Nk:'Nk'}, consol:{cv:'cv'},
+  scour:{V:'V',y1:'y1',ysv:'V'}, rock:{zw:'zw',c:'c',phi:'phi'}, quay:{phi:'phi',dh:'dh'}, mono:{phi:'phi',gs:'gs',huv:'huv',H:'H'}, shaft:{hp:'hp',gam:'gam'}};
 const FORMULA = {
   slope: s => [`FS = [c′ + (γ·z·cos²β − u + q·cos²β)·tanφ′] ÷ [(γ·z + q)·sinβ·cosβ]`, `u = m·γ<sub>w</sub>·z·cos²β`, `γ = ${s.gamma} kN/m³, γ<sub>w</sub> = 9.81 kN/m³, q = ${s.q||0} kPa`],
   piping: s => [`FS = (γ′·D + q) ÷ (γ<sub>w</sub>·Δh<sub>e</sub> / 2)`, `Δh<sub>e</sub> = Δh ${s.grout ? '× 0.8 (cutoff curtain built)' : '(× 0.8 if cutoff curtain built)'}`, `γ<sub>w</sub> = 9.81 kN/m³`],
@@ -1826,7 +2095,12 @@ const FORMULA = {
   found: s => [`FS = q<sub>u</sub> ÷ (Q/B)`, `q<sub>u</sub> = c′N<sub>c</sub> + γD<sub>f</sub>N<sub>q</sub> + ½γ<sub>e</sub>BN<sub>γ</sub> (γ = ${s.gam})`, `N<sub>q</sub> = e<sup>π·tanφ′</sup>·tan²(45° + φ′/2), N<sub>c</sub> = (N<sub>q</sub> − 1)·cotφ′, N<sub>γ</sub> = 2(N<sub>q</sub> + 1)·tanφ′`, `γ<sub>e</sub> = γ′ + (d<sub>w</sub>/B)(γ − γ′) (d<sub>w</sub> < B), γ′ = γ − 9.81`],
   pile: s => [`FS = Q<sub>ult</sub> ÷ (P + Q<sub>n</sub>)`, `Q<sub>ult</sub> = q<sub>b</sub>·πD²/4 + f<sub>s</sub>·πD·L<sub>s</sub> (q<sub>b</sub> = ${s.qb} kPa, f<sub>s</sub> = ${s.fsand} kPa)`, `Q<sub>n</sub> = β·σ′<sub>avg</sub>·πD·L<sub>c</sub> × coating factor, σ′<sub>avg</sub> = fill load + γ′·L<sub>c</sub>/2`, `γ′ = 7.19 kN/m³, L<sub>c</sub> = ${s.Lc} m, P = load per pile × share`],
   exc: s => [`FS = c<sub>u</sub>·N<sub>c</sub>·(1 + 0.15·d) ÷ (γ·H<sub>e</sub> + q)`, `N<sub>c</sub> = 5.14·(1 + 0.2·min(H<sub>e</sub>/B, 1)), H<sub>e</sub> = H − berm effect, B = ${s.B} m`, `Win condition: when excavation is complete (H = ${s.Hf} m), FS ≥ 1.5`],
-  tunnel: s => [`FS = N<sub>k</sub> ÷ N`, `N = (σ<sub>v</sub> − σ<sub>T</sub>) ÷ c<sub>u</sub>`, `σ<sub>v</sub> = γ(C + D/2), γ = ${s.gam} kN/m³, D = ${s.Dt} m`, `Face pressure above 0.8σ<sub>v</sub> causes blow-out`]};
+  tunnel: s => [`FS = N<sub>k</sub> ÷ N`, `N = (σ<sub>v</sub> − σ<sub>T</sub>) ÷ c<sub>u</sub>`, `σ<sub>v</sub> = γ(C + D/2), γ = ${s.gam} kN/m³, D = ${s.Dt} m`, `Face pressure above 0.8σ<sub>v</sub> causes blow-out`],
+  scour: s => [`Scour margin = D<sub>f</sub> ÷ y<sub>s</sub>`, `y<sub>s</sub> = 2.0·K₁·K₂·K₃·a·(y₁/a)<sup>0.35</sup>·Fr<sup>0.43</sup> × protection factor`, `Fr = V ÷ √(g·y₁), K₂ = 1 (pier aligned with flow), K₃ = 1.1 (dune bed), a = ${s.a} m`],
+  rock: s => [`FS = [c·A + (W·cosψ<sub>p</sub> − U − V·sinψ<sub>p</sub> + T)·tanφ] ÷ (W·sinψ<sub>p</sub> + V·cosψ<sub>p</sub>)`, `A = (H − z) ÷ sinψ<sub>p</sub>, U = ½γ<sub>w</sub>·z<sub>w</sub>·A, V = ½γ<sub>w</sub>·z<sub>w</sub>²`, `W = ½γ<sub>r</sub>·H²·[(1 − (z/H)²)·cotψ<sub>p</sub> − cotψ<sub>f</sub>], tension crack depth z = ${s.z} m, γ<sub>r</sub> = ${s.gr} kN/m³`],
+  quay: s => [`FS = M<sub>r</sub> ÷ M<sub>o</sub> (about the toe)`, `M<sub>r</sub> = W′·B/2, W′ = B·(γ<sub>c</sub>·H<sub>c</sub> − γ<sub>w</sub>·h) + added top weight, h = ${s.h} m`, `M<sub>o</sub> = ½K<sub>a</sub>·γ<sub>e</sub>·H<sub>c</sub>²·(H<sub>c</sub>/3) + K<sub>a</sub>·q·H<sub>c</sub>·(H<sub>c</sub>/2) + γ<sub>w</sub>·Δh·h·(h/2)`, `K<sub>a</sub> = (1 − sinφ′) ÷ (1 + sinφ′), γ<sub>e</sub> = ${s.ge} kN/m³ (average including submerged part)`],
+  mono: s => [`FS = H<sub>u</sub> ÷ H`, `H<sub>u</sub> = 0.5·γ′·D·L³·K<sub>p</sub> ÷ (e + L) (Broms: sand, free head, short pile)`, `K<sub>p</sub> = (1 + sinφ′) ÷ (1 − sinφ′)`],
+  shaft: s => [`FS = (γ<sub>t</sub>·D + γ<sub>w</sub>·h<sub>in</sub>) ÷ (γ<sub>w</sub>·h<sub>p</sub>)`, `D = ${s.D0} m − excavation + treated layer, h<sub>p</sub> = artesian head above the top of sand`, `Expected settlement = C<sub>c</sub>·H/(1 + e₀)·log₁₀[(σ′₀ + γ<sub>w</sub>·Δh<sub>out</sub>)/σ′₀], C<sub>c</sub> = 0.3, H = 4 m, e₀ = 1.4, σ′₀ = 60 kPa`, `Win condition: when excavation is done, FS ≥ 1.2 and expected settlement ≤ 5 cm`]};
 function hiddenKey(k){ const h = (HIDE_OF[BT.id]||{})[k]; return h && !revealed(h); }
 function diffState(a, b){
   const out = [];
@@ -2046,6 +2320,7 @@ function startBattle(id, opts){
 const fmtV = v => BT.B.pct ? Math.round(v*100) + '%' : v.toFixed(2);
 const evAt = k => BT.B.events[(BT.turn + k) % BT.B.events.length];
 function paramVal(p, B, st){
+  if (p.fv) return p.fv(st, B);
   switch(p.k){
     case 'crr': return B.crr(st).toFixed(3); case 'csr': return B.csr(st, 0.22).toFixed(3);
     case 'req': return B.sreq(st).toFixed(2); case 'mo': return `${Math.round(st.t*12)} / ${st.dl}`;
@@ -2068,7 +2343,7 @@ function renderBattleUI(){
   let fc = `Next forecast: <b>${evAt(0).name}</b> · ${evAt(0).fx}`;
   if (foresight()) fc += `<br>Then: <b>${evAt(1).name}</b> · ${evAt(1).fx}`;
   if (BT.id === 'consol' && revealed('cv') && revealed('req')) fc += `<br>With current measures, readiness at opening: <b>${fmtV(B.project(st))}</b>`;
-  if (BT.id === 'tunnel') fc += `<br>Surface settlement <b style="color:${st.set > 6 ? 'var(--hp)' : 'var(--gold)'}">${st.set.toFixed(1)} cm</b> / limit 6 cm`;
+  if (B.limit){ const L = B.limit; fc += `<br>${L.l} <b style="color:${st[L.k] > L.max ? 'var(--hp)' : 'var(--gold)'}">${st[L.k].toFixed(1)} ${L.u}</b> / limit ${L.max} ${L.u}`; }
   if (BT.block) fc += `<br><b style="color:var(--fs)">Emergency response ready</b>`;
   if ((APPROVE[BT.id] || []).length){ const miss = approvalMissing(); fc += `<br>🧾 Design approval needs: <b style="color:${miss.length ? 'var(--hp)' : 'var(--fs)'}">${(APPROVE[BT.id]).map(id => svName(id) + (BT.sv.has(id) ? ' ✓' : '')).join(', ')}</b>${miss.length ? ' (not done)' : ''}`; }
   $('forecast').innerHTML = fc;
@@ -2083,7 +2358,7 @@ function renderBattleUI(){
       pv += `<span class="pv" style="color:${d > 0.004 ? 'var(--fs)' : d < -0.004 ? 'var(--hp)' : 'var(--dim)'}">${isC ? 'Expected readiness at opening' : 'Expected ' + B.label}: ${fmtV(a0)} → ${fmtV(nv)}</span>`;
       if (BT.id === 'consol' && sk.id === 'pre'){ const tot = c.load + c.pre; if (tot > 103) pv += `<span class="pv" style="color:var(--hp)">⚠ Total fill load ${tot} kPa: exceeds bearing!</span>`; }
       if (BT.id === 'tunnel' && sk.id === 'epb' && c.sT > 0.8*B.sv(c)) pv += `<span class="pv" style="color:var(--hp)">⚠ Face pressure ${c.sT} kPa: blow-out risk!</span>`;
-      if (BT.id === 'tunnel' && sk.id === 'dew' && c.set > 6) pv += `<span class="pv" style="color:var(--hp)">⚠ Surface settlement ${c.set.toFixed(1)} cm: complaints!</span>`; }
+      if (B.limit && c[B.limit.k] > B.limit.max && c[B.limit.k] > st[B.limit.k]) pv += `<span class="pv" style="color:var(--hp)">⚠ ${B.limit.l} ${c[B.limit.k].toFixed(1)} ${B.limit.u}: complaints!</span>`; }
     if (done) pv = `<span class="pv" style="color:var(--dim)">Built</span>`;
     if (lock) pv = `<span class="pv" style="color:var(--gold)">🔒 Requires: ${itemName(sk.req)} (shop)</span>`;
     const m = effMul(sk.tag);
@@ -2173,12 +2448,12 @@ async function bossTurn(){
     if (v >= 1 && m2) await say(m2);
     if (v < 1){ BT.fx.shake = 50;
       const txt = {liq:'The ground liquefied! Sand and water spouted and structures tilted.', piping:'Water and sand boiled up from the excavation base! Boiling!', wall:'The retaining wall slid out! Sliding failure!', slope:'The slope came crashing down! Landslide!',
-        found:'The footing tilted and soil squeezed out sideways! Bearing failure!', pile:'The pile plunged down! Cracks in the superstructure!', exc:'The excavation floor heaved and the wall bent! Basal heave!', tunnel:'The face collapsed and soil poured in! Face collapse!'}[BT.id];
-      await say((m2 ? m2 + '\n' : '') + `💥 ${txt} (collapse ${BT.col + 1}/${BT.colMax})`); if (await damage(20 + (B.ch === 2 ? 5 : 0))) return; if (await collapsed(true)) return; }
-    if (BT.id === 'tunnel' && st.set > 6){ await say(`Surface settlement ${st.set.toFixed(1)} cm! Nearby buildings crack and complaints pour in.`); if (await damage(15)) return; }
+        found:'The footing tilted and soil squeezed out sideways! Bearing failure!', pile:'The pile plunged down! Cracks in the superstructure!', exc:'The excavation floor heaved and the wall bent! Basal heave!', tunnel:'The face collapsed and soil poured in! Face collapse!'}[BT.id] || B.failTxt || 'The structure collapsed!';
+      await say((m2 ? m2 + '\n' : '') + `💥 ${txt} (collapse ${BT.col + 1}/${BT.colMax})`); if (await damage(20 + 5*(B.ch - 1))) return; if (await collapsed(true)) return; }
+    if (B.limit && st[B.limit.k] > B.limit.max){ const L = B.limit; await say(`${L.l} ${st[L.k].toFixed(1)} ${L.u}! ${L.say}`); if (await damage(L.dmg)) return; }
     BT.turn++;
     if (await tryWin(st)) return;
-    if (BT.turn >= BT.maxTurns){ await say(BT.id === 'exc' && st.H < st.Hf ? 'Time is up and the excavation isn’t finished…' : 'The construction period is over. Target not reached…'); return defeat(15); }
+    if (BT.turn >= BT.maxTurns){ await say((B.late && B.late(st)) || 'The construction period is over. Target not reached…'); return defeat(15); }
   }
   hideMsg(); BT.busy = false; renderBattleUI();
 }
@@ -2201,17 +2476,18 @@ async function victory(){
   if (hasPerk('lucky')) gold = Math.round(gold*1.3);
   const sc = calcScore(); if (BT.secret && secretFirst) sc.tot += 1000; P.score += sc.tot; const key = q ? 'q:' + BT.id : BT.id; P.best[key] = Math.max(P.best[key]||0, sc.tot);
   P.gold += gold; const ev = gainXP(xp);
-  const first = !q && !BT.secret && !P.cleared.includes(BT.id); if (first) P.cleared.push(BT.id);
+  const BT_id = BT.id, first = !q && !BT.secret && !P.cleared.includes(BT.id); if (first) P.cleared.push(BT.id);
   if (q){ P.quests++; P.board = P.board.filter(x => x.id !== q.id); while (P.board.length < 3) { const n = genQuest(); if (!n) break; P.board.push(n); } }
   save(); syncRank();
   await modal(`<h2>${q ? 'Request complete!' : 'Site cleared!'}</h2><p>${B.lesson}</p>
     <div class="reward"><span>EXP +${xp}</span><span>+${gold} k$</span>${ev.map(e => `<span>${e}</span>`).join('')}</div>
     <dl class="score">${sc.parts.map(([a,b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}${sc.mul > 1 ? `<dt>Difficulty multiplier</dt><dd>×${sc.mul}</dd>` : ''}${BT.practice ? '<dt>Practice mode</dt><dd>×¼</dd>' : ''}<dt class="tot">Score this time</dt><dd class="tot">${sc.tot}</dd></dl>
-    ${first ? `<p style="color:var(--gold)">★ Seal obtained (${P.cleared.length}/9)</p>` : ''}${secretFirst ? '<p style="color:var(--gold)">✨ You obtained and equipped the Legendary Geologist’s Hammer! (all method effects +35%)</p>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>Continue</button></div>`);
+    ${first ? `<p style="color:var(--gold)">★ Seal obtained (${P.cleared.length}/${ORDER.length})</p>` : ''}${secretFirst ? '<p style="color:var(--gold)">✨ You obtained and equipped the Legendary Geologist’s Hammer! (all method effects +35%)</p>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>Continue</button></div>`);
   endBattle();
   if (canChangeJob()) await chooseJob();
   if (first && BT === null && P.cleared.length === 5 && P.cleared.every(k => CH1.includes(k))) await chapterEnd(1);
-  if (first && P.cleared.length === 9) await chapterEnd(2);
+  if (first && CH2.includes(BT_id) && CH2.every(k => P.cleared.includes(k))) await chapterEnd(2);
+  if (first && CH3.includes(BT_id) && ORDER.every(k => P.cleared.includes(k))) await chapterEnd(3);
 }
 function endBattle(){ BT = null; cancelAnimationFrame(stageRAF); $('game').appendChild($('msg')); showWorld(); }
 
@@ -2274,7 +2550,12 @@ const SCENES = {
   found: (c,t) => { px(c,0,0,192,60,'#c9d6e3'); for (let i=0;i<5;i++) px(c,8+i*38,28,30,32,'#9aa3ad'); px(c,0,60,192,36,'#a8743a'); px(c,0,60,192,3,'#8f6230'); for (let i=0;i<4;i++) px(c,20+i*44,22,2,38,'#555'); },
   pile: (c,t) => { px(c,0,0,192,48,'#8faac4'); px(c,0,48,192,10,'#7a8a6a'); px(c,0,58,192,22,'#6b6a5a'); px(c,0,80,192,16,'#c9b48a'); px(c,0,30,192,6,'#7d858f'); for (let i=0;i<5;i++) px(c,16+i*40,36,5,52,'#5d6470'); },
   exc: (c,t) => { px(c,0,0,192,96,'#3a4766'); for (let i=0;i<6;i++) px(c,4+i*32,8+(i%2)*10,24,40,'#4b5878'); px(c,0,48,192,48,'#6b5a4a'); px(c,40,48,112,48,'#4a3a2e'); px(c,38,44,4,52,'#9aa3ad'); px(c,150,44,4,52,'#9aa3ad'); for (let i=0;i<3;i++) px(c,42,58+i*12,108,2,'#c96a2b'); },
-  tunnel: (c,t) => { px(c,0,0,192,96,'#16101e'); c.fillStyle='#2a2238'; c.beginPath(); c.ellipse(96,60,96,52,0,Math.PI,0); c.fill(); for (let i=0;i<10;i++) px(c,(i*21+t/3|0)%192,8+(i*7)%20,1,4,'rgba(120,170,230,.5)'); px(c,0,82,192,14,'#3a3048'); for (let i=0;i<8;i++) px(c,i*26,84,14,2,'#7a6a5a'); }
+  tunnel: (c,t) => { px(c,0,0,192,96,'#16101e'); c.fillStyle='#2a2238'; c.beginPath(); c.ellipse(96,60,96,52,0,Math.PI,0); c.fill(); for (let i=0;i<10;i++) px(c,(i*21+t/3|0)%192,8+(i*7)%20,1,4,'rgba(120,170,230,.5)'); px(c,0,82,192,14,'#3a3048'); for (let i=0;i<8;i++) px(c,i*26,84,14,2,'#7a6a5a'); },
+  scour: (c,t) => { px(c,0,0,192,50,'#9cc0d8'); px(c,0,30,192,20,'#b9d3e3'); px(c,0,50,192,46,'#5a7f8a'); for (let i=0;i<8;i++) px(c,(i*29 + t/3|0)%192,56+(i%3)*10,10,1,'#8fb3cc'); px(c,0,20,192,6,'#7d858f'); for (let i=0;i<6;i++) px(c,10+i*34,26,6,40,'#9aa3ad'); },
+  rock: (c,t) => { px(c,0,0,192,56,'#86b7e0'); px(c,0,56,192,40,'#2f6fb5'); for (let i=0;i<6;i++) px(c,(i*41 + t/4|0)%192,60+(i%2)*6,8,1,'#8cc0ef'); c.fillStyle='#6f675c'; c.beginPath(); c.moveTo(110,96); c.lineTo(130,20); c.lineTo(192,14); c.lineTo(192,96); c.fill(); px(c,150,10,30,6,'#5f9a43'); },
+  quay: (c,t) => { px(c,0,0,192,50,'#f0c39a'); px(c,0,50,192,46,'#2f6fb5'); for (let i=0;i<4;i++) px(c,20+i*44,22,26,28,['#c0392b','#2c6fbf','#3a8a5a','#f2c14e'][i]); px(c,120,4,4,46,'#c9a227'); px(c,96,4,60,4,'#c9a227'); px(c,0,46,192,6,'#9aa0a8'); },
+  mono: (c,t) => { px(c,0,0,192,52,'#5d7a96'); px(c,0,52,192,44,'#2a5a8a'); for (let i=0;i<8;i++) px(c,(i*31 + t/2|0)%192,56+(i%3)*9,12,1,'#8cc0ef'); for (let i=0;i<4;i++){ px(c,20+i*48,14,3,40,'#e9eef7'); const a = t/12 + i; px(c,21+i*48 + Math.cos(a)*8,14 + Math.sin(a)*8,2,2,'#e9eef7'); } },
+  shaft: (c,t) => { px(c,0,0,192,96,'#0e1a2e'); for (let i=0;i<12;i++) px(c,(i*37)%192,(i*23 + t/5|0)%96,2,2,'rgba(140,200,255,.5)'); px(c,70,0,52,96,'#16263e'); px(c,66,0,4,96,'#9aa0a8'); px(c,122,0,4,96,'#9aa0a8'); px(c,0,82,192,14,'#3a5a7a'); }
 };
 function stageLoop(){
   const cv = $('cvStage'), c = cv.getContext('2d');
@@ -2430,6 +2711,72 @@ function drawField(){
     c.strokeStyle = 'rgba(255,255,255,.4)'; c.beginPath(); c.moveTo(cx, gy); c.lineTo(cx, cy - rad); c.stroke(); T(`C = ${st.C} m`, cx + 6, (gy + cy - rad)/2, DIM);
     T(`Surface settlement ${st.set.toFixed(1)} cm`, 8, 14, st.set > 6 ? RED : LINE); T(`Face pressure ${st.sT} kPa`, cx + rad + 8, cy + rad + 16, '#3CCF91');
     for (let i=0;i<4;i++) px(c, w*0.7 + i*16, gy - 22 + trough*Math.exp(-((w*0.7 + i*16 - cx)**2)/(2*(w*0.16)**2)), 12, 20, st.set > 6 ? '#a0505a' : '#5d6470'); break; }
+  case 'scour': {
+    BT.hero = [0.08, 0.3];
+    const wl = h*0.3, bed0 = h*0.62, ysm = B.ys(st), sc = Math.min((bed0 - wl)/st.y1, (h - bed0 - 8)/Math.max(st.Df, ysm)), cx = w*0.52, aw = Math.max(10, st.a*sc*1.2), ys = ysm*sc, Df = st.Df*sc;
+    c.fillStyle = WATER; c.fillRect(0, wl, w, bed0 - wl + ys); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(0, wl); c.lineTo(w, wl); c.stroke(); T('▽ Water surface', 8, wl - 4, BLUE);
+    c.fillStyle = SAND; c.beginPath(); c.moveTo(0, bed0); c.lineTo(cx - aw/2 - ys*1.8, bed0); c.lineTo(cx - aw/2, bed0 + ys); c.lineTo(cx + aw/2, bed0 + ys); c.lineTo(cx + aw/2 + ys*1.8, bed0); c.lineTo(w, bed0); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.35)'; c.setLineDash([4,3]); c.lineWidth = 1; c.beginPath(); c.moveTo(cx - aw/2 - ys*1.8, bed0); c.lineTo(cx + aw/2 + ys*1.8, bed0); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#b8c0c8'; c.fillRect(cx - aw/2, h*0.06, aw, bed0 + Df - h*0.06); c.fillRect(cx - aw, bed0 + Df - 6, aw*2, 6);
+    if (st.K1 < 1){ c.fillStyle = '#b8c0c8'; c.beginPath(); c.moveTo(cx - aw/2, wl - 10); c.lineTo(cx - aw, (wl + bed0)/2); c.lineTo(cx - aw/2, bed0); c.fill(); }
+    if (st.prot < 0.99){ c.fillStyle = '#7d858f'; for (let i=0;i<6;i++){ c.fillRect(cx - aw/2 - 10 - i*9, bed0 + ys*(1 - i/6) - 5, 8, 5); c.fillRect(cx + aw/2 + 2 + i*9, bed0 + ys*(1 - i/6) - 5, 8, 5); } }
+    if (bed0 + ys > bed0 + Df - 6){ c.strokeStyle = RED; c.lineWidth = 2; c.strokeRect(cx - aw, bed0 + Df - 6, aw*2, 6); }
+    const va = clamp(st.V/2.5, 0.4, 2); for (let i=0;i<3;i++) arrow(10, wl + (bed0 - wl)*(0.25 + 0.25*i), 10 + 26*va, wl + (bed0 - wl)*(0.25 + 0.25*i), LINE, 2);
+    T(`Df = ${st.Df.toFixed(1)} m`, cx + aw + 6, bed0 + Df/2 + 4); T(`a = ${st.a} m`, cx - aw/2, h*0.06 - 4, DIM); T('Scour hole', cx + aw/2 + ys*0.8, bed0 + ys + 14, RED); break; }
+  case 'rock': {
+    BT.hero = [0.06, 0.82];
+    const gy = h*0.86, top = h*0.12, sc = (gy - top)/st.H, x0 = w*0.2, pf = st.pf*RAD, pp = st.pp*RAD;
+    const crestX = x0 + st.H/Math.tan(pf)*sc, ty = gy - st.H*sc, kx = x0 + (st.H - st.z)/Math.tan(pp)*sc, ky = gy - (st.H - st.z)*sc;
+    c.fillStyle = WATER; c.fillRect(0, gy - 10, x0, h - gy + 10);
+    c.fillStyle = '#6f675c'; c.beginPath(); c.moveTo(x0, gy); c.lineTo(crestX, ty); c.lineTo(w, ty); c.lineTo(w, h); c.lineTo(0, h); c.lineTo(0, gy); c.fill();
+    c.fillStyle = 'rgba(255,139,139,.22)'; c.beginPath(); c.moveTo(x0, gy); c.lineTo(crestX, ty); c.lineTo(kx, ty); c.lineTo(kx, ky); c.closePath(); c.fill();
+    c.strokeStyle = RED; c.lineWidth = 2; c.setLineDash([5,3]); c.beginPath(); c.moveTo(x0, gy); c.lineTo(kx, ky); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#0a0f22'; c.fillRect(kx - 2, ty, 4, ky - ty);
+    if (st.zw > 0){ c.fillStyle = BLUE; c.fillRect(kx - 2, ky - st.zw*sc, 4, st.zw*sc); for (let i=0;i<3;i++) arrow(kx - 4, ky - st.zw*sc*(0.2 + 0.3*i), kx - 12 - st.zw*2, ky - st.zw*sc*(0.2 + 0.3*i), BLUE, 1.5); }
+    if (st.T > 0){ c.strokeStyle = '#f2c14e'; c.lineWidth = 2; const n = Math.min(5, Math.ceil(st.T/200)); for (let i=0;i<n;i++){ const f = 0.2 + 0.6*i/Math.max(1, n - 1), jx = x0 + (kx - x0)*f, jy = gy + (ky - gy)*f; c.beginPath(); c.moveTo(jx - Math.sin(pp)*22, jy - Math.cos(pp)*22); c.lineTo(jx + Math.sin(pp)*18, jy + Math.cos(pp)*18); c.stroke(); } }
+    if (st.drain){ c.strokeStyle = BLUE; c.lineWidth = 2; c.beginPath(); c.moveTo(x0 + 6, gy - 6); c.lineTo(kx, ky - 2); c.stroke(); }
+    if (st.cover){ c.strokeStyle = '#c9ced6'; c.lineWidth = 3; c.beginPath(); c.moveTo(x0, gy); c.lineTo(crestX, ty); c.stroke(); }
+    T(`ψf = ${st.pf}°`, x0 + 8, gy - 8, DIM); T(`ψp = ${st.pp}°`, (x0 + kx)/2 + 10, (gy + ky)/2 + 16, RED); T(`H = ${st.H} m`, w - 8, (ty + gy)/2, DIM, 'right'); T('Tension crack', kx + 6, ty + 14, LINE); break; }
+  case 'quay': {
+    BT.hero = [0.06, 0.5];
+    const gy = h*0.9, top = h*0.1, sc = (gy - top)/(st.Hc + 1.5), cx = w*0.4, Bw = st.B*sc*0.7, cy = gy - st.Hc*sc, sl = gy - st.h*sc, rl = gy - (st.h + st.dh)*sc;
+    c.fillStyle = WATER; c.fillRect(0, sl, cx - Bw/2, gy - sl); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(0, sl); c.lineTo(cx - Bw/2, sl); c.stroke(); T('▽ Sea (low tide)', 6, sl - 4, BLUE);
+    c.fillStyle = st.phi >= 40 ? '#8a8478' : SOIL; c.fillRect(cx + Bw/2, cy, w - cx - Bw/2, gy - cy);
+    c.fillStyle = WATER; c.fillRect(cx + Bw/2, rl, w - cx - Bw/2, gy - rl); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(cx + Bw/2, rl); c.lineTo(w, rl); c.stroke(); T('▽ Residual water behind wall', cx + Bw/2 + 6, rl + 14, BLUE);
+    c.fillStyle = '#5d6470'; c.fillRect(0, gy, w, h - gy);
+    c.fillStyle = st.gc > 20 ? '#9aa0a8' : '#b8c0c8'; c.fillRect(cx - Bw/2, cy, Bw, gy - cy); c.strokeStyle = '#0a0f22'; c.lineWidth = 1; for (let i=1;i<3;i++){ c.beginPath(); c.moveTo(cx - Bw/2 + Bw*i/3, cy + 6); c.lineTo(cx - Bw/2 + Bw*i/3, gy); c.stroke(); }
+    if (st.cap > 0){ const ch = Math.min(18, st.cap/40); c.fillStyle = '#d9dee4'; c.fillRect(cx - Bw/2, cy - ch, Bw, ch); }
+    if (st.drain){ c.fillStyle = BLUE; c.fillRect(cx + Bw/2 - 4, gy - 14, 8, 8); }
+    for (let i=0;i<Math.round(st.q/10);i++) arrow(cx + Bw/2 + 18 + i*22, cy - 14, cx + Bw/2 + 18 + i*22, cy - 1, RED, 2);
+    for (let i=0;i<3;i++) arrow(cx + Bw/2 + 26, rl + (gy - rl)*(0.25 + 0.25*i), cx + Bw/2 + 4, rl + (gy - rl)*(0.25 + 0.25*i), BLUE, 1.5);
+    c.strokeStyle = 'rgba(255,139,139,.8)'; c.lineWidth = 2; c.beginPath(); c.arc(cx - Bw/2, gy, 18, -Math.PI/2, -Math.PI*0.95, true); c.stroke(); T('Overturning', cx - Bw/2 - 40, gy - 22, RED);
+    T(`B = ${st.B.toFixed(1)} m`, cx, gy + 14, LINE, 'center'); break; }
+  case 'mono': {
+    BT.hero = [0.06, 0.1];
+    const top = h*0.05, sc = (h - top - 6)/(st.e + 6 + st.L), gy = top + (st.e + 6)*sc, sl = top + 6*sc, cx = w*0.45, pw = Math.max(8, st.D*sc*0.9), ly = gy - st.e*sc;
+    c.fillStyle = WATER; c.fillRect(0, sl, w, gy - sl); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(0, sl); c.lineTo(w, sl); c.stroke(); T('▽ Sea level', cx + pw/2 + 6, sl - 4, BLUE);
+    c.fillStyle = SAND; c.fillRect(0, gy, w, h - gy); if (st.phi > 35){ c.fillStyle = 'rgba(230,220,180,.35)'; c.fillRect(cx - pw*3, gy, pw*6, st.L*sc); }
+    if (st.sp){ c.fillStyle = '#7d858f'; for (let i=0;i<8;i++) c.fillRect(cx - pw*2.2 + i*pw*0.6, gy - 5, pw*0.5, 5); }
+    c.fillStyle = '#c9ced6'; c.fillRect(cx - pw/2, top - 4, pw, gy + st.L*sc - top + 4); c.fillStyle = '#f2c14e'; c.fillRect(cx - pw/2, sl - 8, pw, 6);
+    if (st.e < 30){ c.strokeStyle = '#9aa0a8'; c.lineWidth = 1.5; for (let i=0;i<3;i++){ const y = ly + (gy - ly)*i/3; c.beginPath(); c.moveTo(cx - pw*1.6, y); c.lineTo(cx + pw*1.6, y + (gy - ly)/3); c.moveTo(cx + pw*1.6, y); c.lineTo(cx - pw*1.6, y + (gy - ly)/3); c.stroke(); } }
+    const hl = clamp(st.H/8000, 0.5, 2); arrow(cx - pw/2 - 50*hl, ly, cx - pw/2 - 2, ly, RED, 3); T(`H`, cx - pw/2 - 50*hl, ly - 6, RED);
+    for (let i=0;i<4;i++){ const y = gy + st.L*sc*(0.15 + 0.22*i); arrow(cx + pw/2 + 30, y, cx + pw/2 + 4, y, '#3CCF91', 1.5); }
+    c.strokeStyle = 'rgba(255,255,255,.4)'; c.setLineDash([3,3]); c.beginPath(); c.moveTo(cx + pw/2 + 40, gy); c.lineTo(cx + pw/2 + 40, ly); c.stroke(); c.setLineDash([]);
+    T(`e = ${st.e} m`, cx + pw/2 + 46, (gy + ly)/2, DIM); T(`L = ${st.L.toFixed(1)} m`, cx + pw/2 + 46, gy + st.L*sc/2, LINE); T(`D = ${st.D} m`, cx - pw/2 - 8, gy + 16, LINE, 'right'); break; }
+  case 'shaft': {
+    BT.hero = [0.06, 0.08];
+    const gy = h*0.1, depth = 20 + st.E, D = st.D0 - st.E + st.plug, sandTop = 20 + st.D0 + st.plug, sc = (h - gy - 4)/(sandTop + 4), cx = w*0.42, sw = w*0.16;
+    const trough = st.set*2.4, sy = x => gy + trough*Math.exp(-((x - cx)**2)/(2*(w*0.22)**2));
+    c.fillStyle = CLAY; c.beginPath(); c.moveTo(0, gy); for (let x=0;x<=w;x+=6) c.lineTo(x, sy(x)); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+    c.fillStyle = 'rgba(74,163,255,.28)'; c.fillRect(0, gy + sandTop*sc, w, h); c.fillStyle = SAND; c.globalAlpha = 0.55; c.fillRect(0, gy + sandTop*sc, w, h); c.globalAlpha = 1; T('Confined sand', 8, gy + sandTop*sc + 16, LINE);
+    if (st.plug > 0){ c.fillStyle = 'rgba(200,200,200,.55)'; c.fillRect(cx - sw/2, gy + (sandTop - st.plug)*sc, sw, st.plug*sc); }
+    const wt = gy + 2*sc, dd = st.dd*3*sc; c.strokeStyle = BLUE; c.lineWidth = 2; c.setLineDash([5,3]); c.beginPath(); c.moveTo(0, wt); for (let x=0;x<=w;x+=6) c.lineTo(x, wt + dd*Math.exp(-((x - cx)**2)/(2*(w*0.2)**2))); c.stroke(); c.setLineDash([]); T('▽ water table', cx + sw/2 + 10, wt - 4, BLUE);
+    c.fillStyle = '#0a0f22'; c.fillRect(cx - sw/2, gy, sw, depth*sc);
+    if (st.hin > 0){ c.fillStyle = WATER; c.fillRect(cx - sw/2, gy + (depth - st.hin)*sc, sw, st.hin*sc); }
+    const cut = st.hp <= 17.5 ? sandTop + 3 : depth + 6; c.fillStyle = '#9aa0a8'; c.fillRect(cx - sw/2 - 5, gy, 5, cut*sc); c.fillRect(cx + sw/2, gy, 5, cut*sc);
+    const up = clamp(st.hp/20, 0.3, 1.6); for (let i=0;i<3;i++){ const x = cx - sw/3 + i*sw/3; arrow(x, gy + sandTop*sc + 4, x, gy + sandTop*sc - 14*up, BLUE, 2); }
+    T(`D = ${D.toFixed(1)} m`, cx + sw/2 + 10, gy + (depth + D/2)*sc + 4, LINE); T(`Expected settlement ${st.set.toFixed(1)} cm`, cx + sw/2 + 10, 14, st.set > 5 ? RED : LINE);
+    for (let i=0;i<3;i++){ const x = w*0.84 + i*18; px(c, x, sy(x) - 18, 14, 18, st.set > 5 ? '#a0505a' : '#5d6470'); } break; }
   }
 }
 window.addEventListener('resize', () => { if (BT) drawField(); });
@@ -2442,7 +2789,7 @@ function genQuest(){
     const type = pick(types), B = BOSSES[type], over = B.rand(), st = Object.assign(B.init(), over);
     let ok;
     if (type === 'consol') ok = true;
-    else if (type === 'exc'){ const c = structuredClone(st); c.H = c.Hf; const v = B.fs(c); ok = v > 0.75 && v < 1.3; }
+    else if (B.finish){ const c = structuredClone(st); B.finish(c); const v = B.fs(c); ok = v > 0.5*B.target && v < 0.87*B.target; }
     else { const v = B.fs(st); ok = v > 0.8 && v < B.target*0.85; }
     if (!ok) continue;
     const stars = pick([1,2,2,3]);
@@ -2480,7 +2827,7 @@ function menuStatus(){
       ${ex ? `<button class="btn sm gold" id="mExam">${ex.name} exam (100 k$)</button>` : ''}</div>
     <div class="card"><div class="cn">${P.name}</div>
       <dl class="score"><dt>Level</dt><dd>${P.lv}${P.lv < MAXLV ? ` (to next: ${XPNEED[P.lv] - P.xp} XP)` : ' (MAX)'}</dd><dt>Max HP / Budget</dt><dd>${maxHp()} / ${maxBud()}</dd>
-      <dt>Total score</dt><dd>${Math.round(P.score)}</dd><dt>Seals</dt><dd>${P.cleared.length}/9</dd><dt>Requests done</dt><dd>${P.quests}</dd>
+      <dt>Total score</dt><dd>${Math.round(P.score)}</dd><dt>Seals</dt><dd>${P.cleared.length}/${ORDER.length}</dd><dt>Requests done</dt><dd>${P.quests}</dd>
       <dt>Test mastery</dt><dd>${labDone('lab') ? '🔬 Lab ✓' : '🔬 Lab ' + TESTS.filter(t => t.kind==='lab' && P.tests[t.id]).length + '/7'} · ${labDone('field') ? '🚜 Field ✓' : '🚜 Field ' + TESTS.filter(t => t.kind==='field' && P.tests[t.id]).length + '/6'}</dd><dt>Save code</dt><dd style="font-family:monospace;color:var(--gold)">${CL.ready ? (P.code || CL.uid) : '-'}</dd><dt>Difficulty · Losses</dt><dd>${DF().n} · ${P.fails||0}</dd><dt>Quiz accuracy</dt><dd>${P.qs.t ? Math.round(P.qs.r/P.qs.t*100) : 0}% (${P.qs.r}/${P.qs.t})</dd></dl>
       <div class="row" style="justify-content:flex-start"><label class="note" for="mCls">Class code</label><input class="inp" id="mCls" maxlength="16" value="${(P.cls||'').replace(/"/g,'&quot;')}"><button class="btn sm" id="mClsSave">Save</button></div></div></div>`;
 }
@@ -2529,7 +2876,7 @@ function bindMenu(){
 }
 async function loadRank(){
   const box = $('mbody'); if (!box) return;
-  if (!CL.ready){ box.innerHTML = `<p>Ranking server not connected. (Instructor: open via the Google Sheets Apps Script web app, or set RANK_URL in the file.)</p><dl class="score"><dt>Total score</dt><dd>${Math.round(P.score)}</dd><dt>Level</dt><dd>${P.lv}</dd><dt>Seals</dt><dd>${P.cleared.length}/9</dd></dl>`; return; }
+  if (!CL.ready){ box.innerHTML = `<p>Ranking server not connected. (Instructor: open via the Google Sheets Apps Script web app, or set RANK_URL in the file.)</p><dl class="score"><dt>Total score</dt><dd>${Math.round(P.score)}</dd><dt>Level</dt><dd>${P.lv}</dd><dt>Seals</dt><dd>${P.cleared.length}/${ORDER.length}</dd></dl>`; return; }
   box.innerHTML = '<p class="note">Loading ranking…</p>';
   await syncRank();
   let rows = [];
@@ -2567,7 +2914,8 @@ function refreshTitle(){ const s = bestSave(); $('btnCont').disabled = !s; $('cl
   if (s){ $('inName').value = s.name; $('inCls').value = s.cls || ''; } }
 async function chapterEnd(n){
   if (n === 1) await modal(`<h2>Chapter 1 cleared!</h2><p>${P.name} has overcome all five trials of the fields. Soil moves with water, and safety comes from effective stress.</p><p>You can now take the ship to the city from the east port. In Chapter 2 “The City Underground”, monsters of foundations, piles, excavations and tunnels await. You can also build skills with “Site requests” in the Menu.</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>To the port!</button></div>`);
-  else await modal(`<h2>A Geo Hero is born</h2><p>${P.name} has overcome all nine trials of the fields and the city.</p><p>No design without investigation; time and water are always on the soil’s side; stability and settlement must be managed together. These are the lessons engraved on the nine seals.</p><div class="reward"><span>${jobTitle()}</span><span>LV ${P.lv}</span><span>Score ${Math.round(P.score)}</span></div><p class="note">Site requests keep coming. Aim for #1 in your class ranking!</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>Keep adventuring</button></div>`);
+  else if (n === 2) await modal(`<h2>Chapter 2 clear!</h2><p>${P.name} conquered all four trials beneath the city. Foundations and piles, retaining walls and tunnels were all a tug of war between soil and water.</p><p>Now you can take the boat to Busan from the port at the city’s east end. In Chapter 3, “Port of Busan”, monsters of scour, rock cliffs, quay walls, offshore wind and undersea tunnels await.</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>To the port!</button></div>`);
+  else await modal(`<h2>A Geo Hero is born</h2><p>${P.name} conquered all fourteen trials of the fields, the city and the sea.</p><p>There is no design without investigation, time and water are always on the soil’s side, and stability and settlement must be managed together. This is the lesson engraved on the fourteen seals.</p><div class="reward"><span>${jobTitle()}</span><span>LV ${P.lv}</span><span>Score ${Math.round(P.score)}</span></div><p class="note">Site requests keep coming. Aim for #1 in your class ranking!</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>Keep adventuring</button></div>`);
 }
 $('btnNew').onclick = async () => {
   if (bestSave()){ const k = await ask('Saved progress will be lost. Start a new game?', ['New game','Cancel']); hideMsg(); if (k !== 0) return; }

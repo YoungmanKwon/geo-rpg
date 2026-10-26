@@ -38,6 +38,7 @@ canvas.pix{image-rendering:pixelated;image-rendering:crisp-edges;display:block;w
 .seals span{width:20px;height:20px;border:2px solid #556;border-radius:4px;display:grid;place-items:center;font-size:12px;background:#0a0f22}
 .seals span.on{border-color:var(--gold);background:#3a2e10}
 .seals span.c2{border-style:dashed}
+.seals span.c3{border-style:dotted}
 .hud .menu{margin-left:auto;font-size:17px;min-height:36px;padding:3px 14px}
 .hud .sp{background:var(--hp);color:#fff;border-radius:999px;font-size:11px;padding:0 6px;margin-left:4px;font-family:"IBM Plex Sans KR"}
 
@@ -410,7 +411,9 @@ const GEAR = [
   {id:'rig', name:'🔩 앵커 천공기', price:400, desc:'“그라운드 앵커” 시공 가능 (토압 거인)'},
   {id:'vacpump', name:'🌀 진공 펌프', price:450, desc:'“진공압밀” 시공 가능 (늪의 군주)'},
   {id:'jetpump', name:'💉 고압 분사 펌프', price:600, desc:'“바닥 고결(JSP)” 시공 가능 (융기의 마왕)'},
-  {id:'drill', name:'⛏️ 강관 천공기', price:700, desc:'“강관다단 그라우팅” 시공 가능 (막장의 용)'}];
+  {id:'drill', name:'⛏️ 강관 천공기', price:700, desc:'“강관다단 그라우팅” 시공 가능 (막장의 용)'},
+  {id:'barge', name:'🚢 해상 작업선', price:800, desc:'“재킷 보강” 시공 가능 (해풍의 크라켄)'},
+  {id:'wellpt', name:'🛢️ 감압정 설비', price:600, desc:'“감압정” 시공 가능 (심해 리바이어던)'}];
 const KEYITEMS = [
   {id:'ticket', name:'🎫 도시행 승선권', price:300, desc:'2장 도시로 가는 배를 탈 수 있다 (인장 5개도 필요)'},
   {id:'harness', name:'🦺 추락방지 안전대', price:350, desc:'흙막이 굴착 현장 출입 필수'},
@@ -418,7 +421,7 @@ const KEYITEMS = [
   {id:'boat', name:'🛶 고무보트', price:900, desc:'물 위를 건널 수 있다. 남동쪽 바다 건너에 무언가가 있다는 소문…'}];
 const owns = id => P.owned.includes(id);
 const itemName = id => (GEAR.find(g => g.id === id) || KEYITEMS.find(g => g.id === id) || {}).name || id;
-const SITE_REQ = {exc:'harness', tunnel:'gas'};
+const SITE_REQ = {exc:'harness', tunnel:'gas', mono:'boat', shaft:'boat'};
 const eq = slot => EQUIP.find(e => e.id === P.equip[slot]);
 const hasPerk = id => P.perks.includes(id);
 
@@ -637,6 +640,8 @@ exc: {
   rand:()=>({cu:Math.round(rr(22,29)), q:Math.round(rr(5,15)), d:+rr(1.5,3).toFixed(1)}),
   fs(s){ const He = Math.max(1, s.H - s.berm), Nc = 5.14*(1 + 0.2*Math.min(He/s.B, 1)); return s.cu*Nc*(1 + 0.15*s.d)/(s.gam*He + s.q); },
   won(s, v){ return s.H >= s.Hf && v >= 1.5; },
+  finish(s){ s.H = s.Hf; },
+  late:s => s.H < s.Hf ? '공기가 끝났는데 굴착을 마치지 못했다…' : '',
   hp(s, v){ return clamp((s.Hf - s.H)/(s.Hf - 4), 0, 1)*0.7 + (v < 1.5 ? 0.3 : 0); },
   target:1.5, maxTurns:8, tgtNote:'(굴착 완료 시)',
   params:[{k:'H',l:'굴착 깊이',u:'m',fn:1},{k:'d',l:'벽체 근입',u:'m',f:1},{k:'q',l:'상재하중',u:'kPa',f:0},{k:'berm',l:'소단 효과',u:'m',f:1},{k:'cu',l:'바닥 점토 cu',u:'kPa',f:0,h:1},{k:'gam',l:'단위중량 γ',u:'kN/m³',f:0,h:1}],
@@ -666,6 +671,7 @@ tunnel: {
   rand:()=>({C:Math.round(rr(10,14)), cu:Math.round(rr(45,55)), sT:Math.round(rr(50,70))}),
   sv(s){ return s.gam*(s.C + s.Dt/2); },
   fs(s){ const N = (this.sv(s) - s.sT)/s.cu; return N <= 0.1 ? 9 : s.Nk/N; },
+  limit:{k:'set', max:6, l:'지표 침하', u:'cm', dmg:15, say:'인근 건물에 균열이 가고 민원이 빗발친다.'},
   target:1.5, maxTurns:8,
   params:[{k:'C',l:'토피 C',u:'m',f:0},{k:'sT',l:'막장압 σT',u:'kPa',f:0},{k:'svv',l:'연직응력 σv',u:'kPa',f:0,fn:1},{k:'set',l:'지표 침하',u:'cm',f:1},{k:'cu',l:'지반 cu',u:'kPa',f:0,h:1},{k:'Nk',l:'한계 안정수',u:'',f:1,h:1}],
   skills:[
@@ -686,9 +692,153 @@ tunnel: {
     {q:'막장압을 지나치게 높이면?',o:['지반이 위로 터져 오르는 분출(blow-out) 위험','막장이 더 쉽게 붕괴','아무 영향 없다'],a:0,e:'토피 하중보다 큰 압력은 지반을 밀어 올립니다.'}],
   qt:['{loc} 도시철도 터널 굴진','{loc} 하수관로 터널 공사'],
   lesson:'터널 막장 안정은 막장압과 지반 강도로 확보하지만, 배수에는 대가가 따릅니다. 지하수위 저하는 상부 점토를 압밀시켜 지표 침하와 주변 건물 피해로 이어집니다. 안정성과 침하를 함께 관리하는 것이 도심 터널의 핵심입니다.'
+},
+scour: {
+  ch:3, name:'세굴 뱀장어', title:'다리를 갉아먹는 물살', label:'세굴 여유율', xp:600, color:'#3a8fa8', failTxt:'교각 밑이 깊게 파여 기초가 드러났다! 다리가 기울었다!',
+  intro:['낙동강 하구의 교각 주변을 맴도는 거대한 뱀장어. 물살이 빨라질수록 교각 밑을 깊게 파낸다.', '교각 세굴 (HEC-18 CSU 식): 세굴깊이 ys를 구해 기초 근입깊이 Df와 비교한다. 세굴 여유율 = Df ÷ ys, 목표 1.5.'],
+  init:()=>({a:2, y1:5, V:2.5, K1:1.1, prot:1, Df:5}),
+  rand:()=>({V:+rr(2.3,2.8).toFixed(1), y1:+rr(4.5,5.5).toFixed(1), Df:+rr(4.6,5.4).toFixed(1)}),
+  ys(s, ev){ const V = s.V + (ev && ev.dv || 0), y = s.y1 + (ev && ev.dy || 0), Fr = V/Math.sqrt(GW*y); return 2*s.K1*1.1*s.a*Math.pow(y/s.a, 0.35)*Math.pow(Fr, 0.43)*s.prot; },
+  fs(s, ev){ return s.Df/this.ys(s, ev); },
+  target:1.5, maxTurns:8,
+  params:[{k:'a',l:'교각 폭 a',u:'m',f:1},{k:'Df',l:'기초 근입깊이 Df',u:'m',f:1},{k:'K1',l:'교각 형상계수 K₁',u:'',f:1},{k:'prot',l:'보호공 감소계수',u:'',f:2},{k:'ysv',l:'세굴깊이 ys',u:'m',h:1,fv:(s,B)=>B.ys(s).toFixed(2)},{k:'V',l:'유속 V',u:'m/s',f:2,h:1},{k:'y1',l:'수심 y₁',u:'m',f:1,h:1}],
+  skills:[
+    {id:'riprap',name:'사석 보호공',tag:'reinf',cost:3,desc:'교각 둘레에 큰 돌을 깔아 세굴을 줄인다 (보호공 감소계수 −0.2)',apply:(s,m)=>{s.prot=Math.max(0.5,+(s.prot-0.2*m).toFixed(3));}},
+    {id:'nose',name:'교각 유선형 개량',tag:'geom',cost:3,once:true,desc:'네모난 교각 앞부분을 뾰족하게 다듬는다 (K₁ 1.1 → 0.9, 1회)',apply:s=>{s.K1=0.9;}},
+    {id:'deep',name:'기초 근입 확대',tag:'reinf',cost:4,desc:'말뚝을 더해 기초를 2 m 더 깊게 한다',apply:(s,m)=>{s.Df=+(s.Df+2*m).toFixed(1);}},
+    {id:'spur',name:'상류 수제 설치',tag:'geom',cost:3,desc:'상류에 수제를 놓아 교각 앞 유속을 15% 줄인다',apply:(s,m)=>{s.V=+(s.V*(1-0.15*m)).toFixed(2);}},
+    {id:'collar',name:'세굴 방지 칼라',tag:'improve',cost:2,once:true,desc:'교각에 원판 칼라를 둘러 말굽 소용돌이를 막는다 (보호공 감소계수 ×0.85, 1회)',apply:s=>{s.prot=+(s.prot*0.85).toFixed(3);}}],
+  events:[
+    {name:'장마',fx:'유속 +0.3 m/s',say:'장맛비로 강물이 불어난다.',rain:1,apply:s=>{s.V=+(s.V+0.3).toFixed(2);}},
+    {name:'홍수',fx:'유속 +0.6 m/s, 수심 +1 m (이번 턴만)',say:'홍수다! 흙탕물이 교각을 세차게 휘감는다.',rain:3,shake:0.5,dv:0.6,dy:1},
+    {name:'골재 채취',fx:'강바닥이 낮아져 근입깊이 −0.8 m',say:'상류에서 모래를 퍼 가 강바닥이 낮아졌다.',apply:s=>{s.Df=Math.max(2,+(s.Df-0.8).toFixed(1));}}],
+  quiz:[
+    {q:'교각 세굴이 생기는 주된 원인은?',o:['교각 앞 하강류와 말굽 소용돌이가 강바닥을 파내서','강물이 흙을 녹여서','교각이 무거워서'],a:0,e:'흐름이 교각에 부딪혀 아래로 꺾이고, 바닥에서 말굽 모양 소용돌이가 흙을 실어 갑니다.'},
+    {q:'유속이 빨라지면 세굴깊이는?',o:['깊어진다','얕아진다','변하지 않는다'],a:0,e:'프루드수 Fr = V/√(gy)가 커지면 ys도 커집니다.'},
+    {q:'기초 근입깊이를 예상 세굴깊이보다 깊게 두는 이유는?',o:['세굴 뒤에도 기초 아래 흙이 남아 지지력을 유지하려고','공사비를 줄이려고','교각을 가볍게 하려고'],a:0,e:'세굴로 흙이 사라지면 기초가 드러나 지지력과 수평저항을 잃습니다.'}],
+  qt:['{loc} 하천 교량 세굴 점검','{loc} 교각 기초 보강'],
+  lesson:'교량 붕괴의 큰 원인은 홍수 때의 세굴입니다. 세굴깊이는 유속과 수심, 교각 모양에 따라 달라지므로, 흐름을 줄이는 대책과 바닥을 지키는 대책, 기초를 깊게 하는 대책을 함께 씁니다.'
+},
+rock: {
+  ch:3, name:'낙석 가고일', title:'절벽을 깨우는 자', label:'평면파괴 FS', xp:650, color:'#8c8478', failTxt:'절리면을 따라 암반 블록이 바다로 미끄러졌다! 평면파괴!',
+  intro:['태종대 해안 절벽에 붙어 사는 돌 괴물. 균열에 물이 차면 절벽째로 미끄러뜨린다.', '암반 평면파괴 (Hoek & Bray): 절리면을 따라 미끄러지는 블록. 인장균열 속 물이 블록을 밀고(V), 절리면 물이 블록을 들어 올린다(U). 목표 1.5.'],
+  init:()=>({H:20, pf:55, pp:35, z:6, zw:3, c:25, phi:35, gr:26, T:0, drain:false, cover:false}),
+  rand:()=>({zw:+rr(2,4).toFixed(1), c:Math.round(rr(20,30)), phi:Math.round(rr(33,37))}),
+  parts(s){ const pp = s.pp*RAD, A = (s.H - s.z)/Math.sin(pp), W = 0.5*s.gr*s.H*s.H*((1 - (s.z/s.H)**2)/Math.tan(pp) - 1/Math.tan(s.pf*RAD)); return {A, W, U:0.5*GW*s.zw*A, V:0.5*GW*s.zw*s.zw}; },
+  fs(s, ev){ const kh = ev && ev.kh || 0, pp = s.pp*RAD, {A, W, U, V} = this.parts(s);
+    return (s.c*A + (W*Math.cos(pp) - U - V*Math.sin(pp) - kh*W*Math.sin(pp) + s.T)*Math.tan(s.phi*RAD))/(W*Math.sin(pp) + V*Math.cos(pp) + kh*W*Math.cos(pp)); },
+  target:1.5, maxTurns:8,
+  params:[{k:'H',l:'절벽 높이 H',u:'m',f:0},{k:'pf',l:'사면 경사 ψf',u:'°',f:0},{k:'pp',l:'절리면 경사 ψp',u:'°',f:0},{k:'T',l:'볼트·앵커력 T',u:'kN/m',f:0},{k:'zw',l:'균열 수위 zw',u:'m',f:1,h:1},{k:'c',l:'절리 점착력 c',u:'kPa',f:0,h:1},{k:'phi',l:'절리 마찰각 φ',u:'°',f:0,h:1}],
+  skills:[
+    {id:'drain',name:'수평 배수공',tag:'drain',cost:2,desc:'균열 속 물을 빼낸다 (zw = 0). 이후 폭우 영향도 줄어든다',apply:s=>{s.zw=0;s.drain=true;}},
+    {id:'bolt',name:'록볼트',tag:'reinf',cost:3,desc:'절리면을 가로질러 볼트를 박아 블록을 눌러 붙인다 (T +200 kN/m)',apply:(s,m)=>{s.T+=Math.round(200*m);}},
+    {id:'cut',name:'사면 경사 완화',tag:'geom',cost:4,once:true,desc:'절벽 윗부분을 깎아 경사를 55° → 48°로 낮춘다. 미끄러지는 블록이 가벼워진다 (1회)',apply:s=>{s.pf=48;}},
+    {id:'cover',name:'숏크리트 표면 보호',tag:'improve',cost:1,once:true,desc:'균열 입구를 막아 빗물 유입을 절반으로 줄인다 (1회)',apply:s=>{s.cover=true;}},
+    {id:'anchor',req:'rig',name:'프리스트레스 앵커',tag:'reinf',cost:5,desc:'긴 앵커로 블록을 강하게 당겨 고정한다 (T +500 kN/m)',apply:(s,m)=>{s.T+=Math.round(500*m);}}],
+  events:[
+    {name:'집중호우',fx:'균열 수위 +3 m (배수공 있으면 +1 m, 표면 보호 시 절반)',say:'집중호우! 인장균열에 빗물이 차오른다.',rain:3,apply:s=>{s.zw=Math.min(s.z,+(s.zw+(s.drain?1:3)*(s.cover?0.5:1)).toFixed(1));}},
+    {name:'지진',fx:'kh 0.15 수평 관성력 (이번 턴만)',say:'지진! 절벽 전체가 흔들린다.',kh:0.15,shake:1},
+    {name:'파랑 침식',fx:'절리 점착력 c −5 kPa',say:'거센 파도가 절벽 아래를 때려 절리가 벌어진다.',shake:0.4,apply:s=>{s.c=Math.max(5,s.c-5);}}],
+  quiz:[
+    {q:'암반 사면의 인장균열에 물이 차면?',o:['균열 수압이 블록을 밀고 절리면 양압력이 마찰을 줄여 FS가 떨어진다','물이 블록을 붙잡아 FS가 오른다','아무 영향이 없다'],a:0,e:'V는 미끄러지는 힘을 키우고, U는 절리면을 누르는 힘을 줄입니다.'},
+    {q:'평면파괴가 일어날 수 있는 절리면 경사 ψp의 조건은?',o:['사면 경사보다 완만하고 절리 마찰각보다 가파르다','사면 경사보다 가파르다','0°이다'],a:0,e:'절리면이 사면 밖으로 드러나야(ψp < ψf) 하고, 마찰각보다 가팔라야(ψp > φ) 미끄러집니다.'},
+    {q:'록볼트를 절리면에 수직으로 박으면?',o:['절리면을 누르는 힘이 커져 마찰저항(T·tanφ)이 늘어난다','블록이 가벼워진다','물이 빠진다'],a:0,e:'볼트 인장력이 수직력이 되어 마찰저항을 더합니다.'}],
+  qt:['{loc} 해안 절벽 낙석 방지','{loc} 암반 사면 보강'],
+  lesson:'암반 사면은 흙이 아니라 절리면이 약점입니다. 절리의 방향과 마찰각, 그리고 균열 속 물을 조사해야 하며, 배수와 록볼트는 가장 효과적인 짝입니다.'
+},
+quay: {
+  ch:3, name:'케이슨 크랩', title:'안벽을 뒤집는 집게', label:'전도 FS', xp:700, color:'#c0603a', failTxt:'케이슨이 바다 쪽으로 넘어갔다! 안벽 전도!',
+  intro:['북항 부두의 거대한 게. 썰물 때마다 집게로 케이슨을 바다 쪽으로 넘기려 한다.', '중력식 케이슨 안벽의 전도 검토: 앞굽 기준 저항모멘트(수중중량 W′ × B/2) ÷ 전도모멘트(토압 + 상재하중 + 잔류수압). 목표는 항만 설계기준(상시) 1.2.'],
+  init:()=>({B:8, Hc:18, h:15, gc:20, phi:35, ge:11, q:20, dh:2.3, cap:0, drain:false}),
+  rand:()=>({dh:+rr(2,2.6).toFixed(1), q:Math.round(rr(15,25)), phi:Math.round(rr(33,37))}),
+  mom(s, ev){ const kh = ev && ev.kh || 0, Ka = (1-Math.sin(s.phi*RAD))/(1+Math.sin(s.phi*RAD)), W = s.B*(s.gc*s.Hc - GW*s.h) + s.cap;
+    const Mo = 0.5*Ka*s.ge*s.Hc**3/3 + Ka*s.q*s.Hc**2/2 + GW*s.dh*s.h*s.h/2 + kh*(s.gc*s.B*s.Hc + s.cap)*s.Hc/2;
+    return {Mr:W*s.B/2, Mo}; },
+  fs(s, ev){ const m = this.mom(s, ev); return m.Mr/m.Mo; },
+  target:1.2, maxTurns:8,
+  params:[{k:'B',l:'케이슨 폭 B',u:'m',f:1},{k:'Hc',l:'케이슨 높이 Hc',u:'m',f:0},{k:'gc',l:'속채움 포함 단위중량 γc',u:'kN/m³',f:0},{k:'q',l:'상재하중 q',u:'kPa',f:0},{k:'cap',l:'상부 증설 중량',u:'kN/m',f:0},{k:'phi',l:'배면 φ′',u:'°',f:0,h:1},{k:'dh',l:'잔류수위차 Δh',u:'m',f:1,h:1}],
+  skills:[
+    {id:'fill',name:'고밀도 속채움',tag:'improve',cost:3,once:true,desc:'케이슨 속을 무거운 슬래그로 채운다 (γc 20 → 22, 1회)',apply:s=>{s.gc=22;}},
+    {id:'light',name:'배면 사석 치환',tag:'improve',cost:4,once:true,desc:'케이슨 뒤를 마찰각 큰 사석으로 바꿔 토압을 줄인다 (φ′ 40°, γe 10, 1회)',apply:s=>{s.phi=40;s.ge=10;}},
+    {id:'relief',name:'잔류수위 배수공',tag:'drain',cost:2,desc:'배면 물이 바다로 빨리 빠지게 한다 (Δh −1 m). 이후 간조 영향도 줄어든다',apply:(s,m)=>{s.dh=Math.max(0.3,+(s.dh-m).toFixed(2));s.drain=true;}},
+    {id:'widen',name:'케이슨 확폭',tag:'geom',cost:5,desc:'케이슨 폭 +1.5 m (저항모멘트는 B²에 비례)',apply:(s,m)=>{s.B=+(s.B+1.5*m).toFixed(2);}},
+    {id:'cap',name:'상부 콘크리트 증설',tag:'geom',cost:3,desc:'상치 콘크리트를 키워 무게를 더한다 (+250 kN/m)',apply:(s,m)=>{s.cap+=Math.round(250*m);}}],
+  events:[
+    {name:'대조기 급속 간조',fx:'잔류수위차 +0.8 m (배수공 있으면 +0.2 m)',say:'대조기 썰물! 바다는 빠졌는데 안벽 뒤 물은 그대로다.',rain:1,apply:s=>{s.dh=+(s.dh+(s.drain?0.2:0.8)).toFixed(2);}},
+    {name:'초대형 크레인',fx:'상재하중 +15 kPa',say:'초대형 컨테이너 크레인이 안벽 위로 들어온다.',shake:0.5,apply:s=>{s.q+=15;}},
+    {name:'지진',fx:'kh 0.06 관성력 (이번 턴만)',say:'지진! 케이슨이 앞뒤로 흔들린다.',kh:0.06,shake:1}],
+  quiz:[
+    {q:'안벽의 잔류수압이란?',o:['바다 수위가 빠르게 내려가도 배면 수위가 늦게 내려가 생기는 수위차의 수압','파도가 때리는 힘','빗물의 무게'],a:0,e:'썰물 때 배면 흙 속의 물이 미처 빠지지 못해 안벽을 바다 쪽으로 밉니다.'},
+    {q:'물속 케이슨의 무게로 전도 저항을 계산할 때 쓰는 값은?',o:['부력을 뺀 수중중량','공기 중 무게','0'],a:0,e:'물에 잠긴 부분은 부력만큼 가벼워집니다.'},
+    {q:'케이슨 폭 B를 넓히면 전도 저항모멘트는?',o:['B²에 비례해 커진다','B에 반비례해 작아진다','변하지 않는다'],a:0,e:'무게 W′도 B에 비례하고 팔 길이 B/2도 B에 비례합니다.'}],
+  qt:['{loc} 부두 안벽 보강','{loc} 컨테이너 부두 확장'],
+  lesson:'중력식 안벽은 무게로 버팁니다. 물속에서는 부력만큼 가벼워지고, 조석이 만드는 잔류수압이 생각보다 큽니다. 배면 배수와 토압 경감, 무게 증가를 함께 검토해야 합니다.'
+},
+mono: {
+  ch:3, name:'해풍의 크라켄', title:'바다에 꽂힌 기둥을 흔드는 자', label:'수평저항 FS', xp:750, color:'#5a4fa8', failTxt:'모노파일이 기울어 풍력발전기가 쓰러졌다! 수평 파괴!',
+  intro:['청사포 앞바다 해상풍력 단지에 나타난 크라켄. 촉수로 모노파일을 휘감아 흔든다.', 'Broms 방법 (사질토, 머리 자유, 짧은 강체 말뚝): 극한 수평저항 Hu = 0.5·γ′·D·L³·Kp ÷ (e + L). FS = Hu ÷ H, 목표 2.0.'],
+  init:()=>({D:6, L:18, e:30, gs:9, phi:33, H:8000, sp:false}),
+  rand:()=>({phi:Math.round(rr(31,35)), H:Math.round(rr(76,84))*100, L:Math.round(rr(17,19))}),
+  hu(s){ const Kp = (1+Math.sin(s.phi*RAD))/(1-Math.sin(s.phi*RAD)); return 0.5*s.gs*s.D*s.L**3*Kp/(s.e + s.L); },
+  fs(s, ev){ return this.hu(s)/(s.H*(ev && ev.hm || 1)); },
+  target:2, maxTurns:8,
+  params:[{k:'D',l:'말뚝 지름 D',u:'m',f:1},{k:'L',l:'근입 길이 L',u:'m',f:1},{k:'e',l:'하중 작용 높이 e',u:'m',f:0},{k:'huv',l:'극한 수평저항 Hu',u:'kN',h:1,fv:(s,B)=>B.hu(s).toFixed(0)},{k:'H',l:'설계 수평하중 H',u:'kN',f:0,h:1},{k:'phi',l:'해저 모래 φ′',u:'°',f:0,h:1},{k:'gs',l:'수중단위중량 γ′',u:'kN/m³',f:1,h:1}],
+  skills:[
+    {id:'deep',name:'근입 연장',tag:'reinf',cost:4,desc:'말뚝을 2 m 더 박는다 (저항은 L³에 가깝게 커진다)',apply:(s,m)=>{s.L=+(s.L+2*m).toFixed(1);}},
+    {id:'dia',name:'대구경 말뚝 교체',tag:'geom',cost:5,once:true,desc:'지름 6 m → 7.5 m (1회)',apply:s=>{s.D=7.5;}},
+    {id:'grout',name:'해저 지반 그라우팅',tag:'improve',cost:3,desc:'말뚝 주변 모래를 고결시킨다 (φ′ +3°)',apply:(s,m)=>{s.phi=Math.min(42,+(s.phi+3*m).toFixed(1));}},
+    {id:'jacket',req:'barge',name:'재킷 보강',tag:'geom',cost:4,once:true,desc:'해상 작업선으로 재킷 구조를 덧대 하중 작용점을 8 m 낮춘다 (1회)',apply:s=>{s.e=Math.max(10,s.e-8);}},
+    {id:'scourp',name:'세굴 방지 사석',tag:'reinf',cost:2,once:true,desc:'말뚝 주변에 사석을 깔아 세굴을 막는다 (1회)',apply:s=>{s.sp=true;}}],
+  events:[
+    {name:'너울',fx:'수평하중 +600 kN',say:'먼바다에서 큰 너울이 밀려온다.',shake:0.4,apply:s=>{s.H+=600;}},
+    {name:'세굴',fx:'근입 길이 −1.5 m (세굴 방지 사석이 있으면 없음)',say:'조류가 말뚝 밑동의 모래를 쓸어 간다.',apply:s=>{ if (!s.sp) s.L=Math.max(8,+(s.L-1.5).toFixed(1)); }},
+    {name:'태풍',fx:'수평하중 ×1.4 (이번 턴만)',say:'태풍이 몰아친다! 바람과 파도가 말뚝을 휘두른다.',rain:3,shake:1,hm:1.4}],
+  quiz:[
+    {q:'Broms 짧은 말뚝에서 근입 길이 L을 늘리면 극한 수평저항은?',o:['L³에 가깝게 크게 늘어난다','변하지 않는다','줄어든다'],a:0,e:'Hu = 0.5γ′DL³Kp/(e + L)이라 L의 영향이 가장 큽니다.'},
+    {q:'해상 말뚝 주변에 세굴이 생기면?',o:['근입이 짧아져 수평저항이 크게 줄어든다','저항이 커진다','영향이 없다'],a:0,e:'세굴은 말뚝을 잡아 주는 흙을 없애 L을 줄이는 것과 같습니다.'},
+    {q:'φ′ = 30°일 때 수동토압계수 Kp는?',o:['3','1/3','1'],a:0,e:'Kp = (1 + sinφ′)/(1 − sinφ′) = 1.5/0.5 = 3.'}],
+  qt:['{loc} 해상풍력 기초 점검','{loc} 해상 계류 말뚝 보강'],
+  lesson:'바다의 말뚝은 연직하중보다 바람과 파도의 수평하중이 더 무섭습니다. 근입 길이, 지름, 하중 작용 높이, 그리고 세굴 방지를 함께 설계해야 합니다.'
+},
+shaft: {
+  ch:3, name:'심해 리바이어던', title:'해저터널을 노리는 자', label:'저면 융기 FS', xp:900, color:'#2a5a8a',
+  intro:['가덕 해저터널 수직구 아래 피압대수층에 잠든 리바이어던. 바닥 점토층이 얇아질수록 아래에서 밀어 올린다.', '수직구 저면 양압력 검토: FS = (γt·D + γw·h내부) ÷ (γw·hp). 굴착이 끝났을 때 FS 1.2 이상이고, 감압으로 생기는 주변 예상 침하가 5 cm 이하여야 승리!'],
+  init:()=>({D0:14, E:0, Ef:6, plug:0, gam:18, hp:20, hin:0, dd:0, set:0}),
+  rand:()=>({hp:Math.round(rr(19,21)), gam:+rr(17.5,18.5).toFixed(1)}),
+  sett(dd){ return dd <= 0 ? 0 : +(100*0.3*4/2.4*Math.log10((60 + GW*dd)/60)).toFixed(2); },
+  fs(s, ev){ const D = s.D0 - s.E + s.plug, hp = s.hp + (ev && ev.tide || 0); return (s.gam*D + GW*s.hin)/(GW*hp); },
+  finish(s){ s.E = s.Ef; },
+  won(s, v){ return s.E >= s.Ef && v >= 1.2 && s.set <= 5; },
+  hp(s, v){ return clamp((s.Ef - s.E)/s.Ef, 0, 1)*0.6 + (v < 1.2 ? 0.25 : 0) + (s.set > 5 ? 0.15 : 0); },
+  limit:{k:'set', max:5, l:'주변 예상 침하', u:'cm', dmg:15, say:'부두 시설에 균열이 생기고 민원이 빗발친다.'},
+  late:s => s.E < s.Ef ? '공기가 끝났는데 수직구 굴착을 마치지 못했다…' : '',
+  failTxt:'수직구 바닥이 터지며 모래와 바닷물이 솟구쳤다! 저면 융기 발생!',
+  target:1.2, maxTurns:8, tgtNote:'(굴착 완료 시)',
+  params:[{k:'E',l:'굴착 진행',u:'m',fv:s=>`${s.E} / ${s.Ef}`},{k:'Dv',l:'바닥 점토 두께 D',u:'m',fv:s=>(s.D0 - s.E + s.plug).toFixed(1)},{k:'hin',l:'내부 수위 h내부',u:'m',f:1},{k:'set',l:'주변 예상 침하',u:'cm',f:1},{k:'hp',l:'피압수두 hp',u:'m',f:1,h:1},{k:'gam',l:'점토 γt',u:'kN/m³',f:1,h:1}],
+  skills:[
+    {id:'relief',req:'wellpt',name:'감압정',tag:'drain',cost:3,desc:'피압수를 퍼내 피압수두 −4 m. 하지만 주변 지하수위도 1 m 내려가 침하가 생긴다',apply:(s,m)=>{s.hp=Math.max(4,+(s.hp-4*m).toFixed(1)); s.dd+=1; s.set=BOSSES.shaft.sett(s.dd);}},
+    {id:'cutoff',name:'차수벽 근입 연장',tag:'reinf',cost:5,once:true,desc:'차수벽을 더 깊이 박아 수직구 안쪽 피압수두만 −3 m. 바깥 수위는 그대로 (1회)',apply:s=>{s.hp=Math.max(4,s.hp-3);}},
+    {id:'grout',name:'저면 그라우팅',tag:'improve',cost:4,desc:'바닥 아래 모래층 윗부분을 굳혀 막는다 (점토 두께 +2 m 효과)',apply:(s,m)=>{s.plug=+(s.plug+2*m).toFixed(1);}},
+    {id:'wet',name:'수중 굴착',tag:'geom',cost:3,once:true,desc:'수직구 안에 물을 8 m 채운 채 판다. 물 무게가 바닥을 눌러 준다 (1회)',apply:s=>{s.hin=8;}},
+    {id:'rech',name:'인공 함양',tag:'drain',cost:2,desc:'주변에 물을 다시 넣어 지하수위를 1 m 되살린다 (예상 침하 감소)',apply:(s,m)=>{s.dd=Math.max(0,+(s.dd-m).toFixed(2)); s.set=BOSSES.shaft.sett(s.dd);}}],
+  events:[
+    {name:'굴착 진행',fx:'굴착 +1.5 m',say:'굴착기가 1.5 m를 더 판다. 바닥 점토가 얇아진다.',shake:0.5,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'굴착 진행',fx:'굴착 +1.5 m',say:'굴착이 계속된다. 1.5 m 더.',shake:0.5,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'대조기 만조',fx:'피압수두 +2 m (이번 턴만)',say:'대조기 만조! 바다 수위가 올라 피압수두도 오른다.',rain:1,tide:2},
+    {name:'굴착 진행',fx:'굴착 +1.5 m',say:'굴착기가 1.5 m를 더 판다.',shake:0.5,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'연속 양수',fx:'감압정이 있으면 바깥 수위 −0.5 m 더',say:'감압정 펌프가 쉬지 않고 돈다. 주변 지하수가 계속 빠져나간다.',apply:s=>{ if (s.dd > 0){ s.dd+=0.5; s.set=BOSSES.shaft.sett(s.dd); } }},
+    {name:'최종 굴착',fx:'굴착 +1.5 m',say:'최종 굴착! 바닥이 울렁인다.',shake:1,apply:s=>{s.E=Math.min(s.Ef,s.E+1.5);}},
+    {name:'대조기 만조',fx:'피압수두 +2 m (이번 턴만)',say:'다시 대조기 만조다. 리바이어던이 바닥을 두드린다.',rain:1,shake:0.6,tide:2},
+    {name:'정밀 계측',fx:'변화 없음',say:'리바이어던이 숨을 고른다. 계측기가 조용하다.'}],
+  quiz:[
+    {q:'수직구 바닥 아래에 피압대수층이 있을 때 바닥이 들리는 이유는?',o:['피압수의 양압력이 위 점토층의 무게보다 커져서','점토가 얼어서','수직구 벽이 무거워서'],a:0,e:'점토층 무게 γt·D가 아래 수압 γw·hp를 이기지 못하면 바닥이 터집니다.'},
+    {q:'감압정으로 피압수두를 낮출 때의 부작용은?',o:['주변 지하수위가 내려가 연약 점토가 압밀 침하한다','바닷물이 언다','부작용은 없다'],a:0,e:'수위 저하 → 유효응력 증가 → 압밀 침하. 2장 막장의 용과 같은 원리입니다.'},
+    {q:'수중 굴착이 저면 융기에 유리한 이유는?',o:['수직구 안 물 무게가 바닥을 눌러 양압력에 맞선다','흙이 가벼워진다','굴착이 빨라진다'],a:0,e:'안쪽 물 γw·h내부가 저항 쪽에 더해집니다.'}],
+  qt:['{loc} 해저터널 수직구 굴착','{loc} 해안 펌프장 수직구 공사'],
+  lesson:'깊은 수직구 바닥은 아래 피압수와 위 점토층의 힘겨루기입니다. 감압은 가장 빠른 해결책이지만 주변 침하라는 대가를 치릅니다. 차수, 그라우팅, 수중 굴착, 인공 함양을 섞어 안정과 침하를 함께 잡는 것이 해저터널 기술자의 몫입니다.'
 }};
-const ORDER = ['slope','piping','wall','liq','consol','found','pile','exc','tunnel'];
-const CH1 = ORDER.slice(0,5), CH2 = ORDER.slice(5);
+const ORDER = ['slope','piping','wall','liq','consol','found','pile','exc','tunnel','scour','rock','quay','mono','shaft'];
+const CH1 = ORDER.slice(0,5), CH2 = ORDER.slice(5,9), CH3 = ORDER.slice(9);
 const ALLQUIZ = ORDER.flatMap(k => BOSSES[k].quiz);
 /* 현장 조사 종류: 조사마다 드러나는 지반정수와 예상 효과가 보이는 공법이 다르다 */
 const SURVEYS = {
@@ -700,7 +850,12 @@ const SURVEYS = {
   found:[{id:'plt',name:'평판재하시험',cost:2,rv:['phi','c','qu'],desc:'지반 강도와 극한지지력'},{id:'well',name:'수위 관측',cost:1,rv:['dw'],desc:'기초 아래 지하수위'}],
   pile:[{id:'load',name:'말뚝 재하시험',cost:2,rv:['qul'],desc:'말뚝 극한지지력'},{id:'nsf',name:'간극수압·침하 계측',cost:2,rv:['beta','qn'],desc:'부마찰력 크기'}],
   exc:[{id:'vane',name:'베인전단시험',cost:2,rv:['cu'],desc:'바닥 점토의 비배수 강도'},{id:'plan',name:'계측·시공계획 검토',cost:1,rv:['gam'],desc:'배면 하중 조건'}],
-  tunnel:[{id:'probe',name:'선진 수평시추',cost:2,rv:['cu'],desc:'막장 앞 지반 강도'},{id:'face',name:'막장 관찰·매핑',cost:1,rv:['Nk'],desc:'막장 자립성 (한계 안정수)'}]};
+  tunnel:[{id:'probe',name:'선진 수평시추',cost:2,rv:['cu'],desc:'막장 앞 지반 강도'},{id:'face',name:'막장 관찰·매핑',cost:1,rv:['Nk'],desc:'막장 자립성 (한계 안정수)'}],
+  scour:[{id:'flow',name:'유속·수심 측정 (ADCP)',cost:2,rv:['V','y1','ysv'],desc:'교각 앞 유속과 수심'},{id:'bed',name:'하상 변동 측량',cost:1,rv:[],desc:'강바닥 높이 변화와 보호공 상태'}],
+  rock:[{id:'joint',name:'절리면 조사·경사시험',cost:2,rv:['c','phi'],desc:'절리면 점착력과 마찰각'},{id:'crack',name:'균열 수위 관측',cost:1,rv:['zw'],desc:'인장균열 속 수위'}],
+  quay:[{id:'back',name:'배면 시료 시험',cost:2,rv:['phi'],desc:'배면 흙의 φ′'},{id:'tide',name:'잔류수위 관측',cost:1,rv:['dh'],desc:'안벽 뒤와 바다의 수위차'}],
+  mono:[{id:'scpt',name:'해저 콘관입시험',cost:2,rv:['phi','gs','huv'],desc:'해저 모래의 φ′와 γ′'},{id:'met',name:'파랑·풍황 관측',cost:1,rv:['H'],desc:'설계 수평하중'}],
+  shaft:[{id:'piez',name:'피압수두 측정',cost:2,rv:['hp'],desc:'모래층의 피압수두'},{id:'bore',name:'시추·압밀 시험',cost:1,rv:['gam'],desc:'바닥 점토의 단위중량'}]};
 const NEEDS = {
   slope:{nail:'bore', cut:'bore', drain:'piezo', cover:'piezo', trap:'bore'},
   piping:{deepen:'bore', filter:'bore', pump:'perm', grout:'perm', trap:'bore'},
@@ -710,7 +865,12 @@ const NEEDS = {
   found:{widen:'plt', deep:'plt', replace:'plt', grout:'plt', dewater:'well', trap:'plt'},
   pile:{deep:'load', dia:'load', group:'load', coat:'nsf', precon:'nsf', trap:'load'},
   exc:{wall:'vane', jet:'vane', clear:'plan', berm:'plan', trap:'plan'},
-  tunnel:{epb:'probe', fore:'probe', dew:'probe', bolt:'face', ring:'face', trap:'probe'}};
+  tunnel:{epb:'probe', fore:'probe', dew:'probe', bolt:'face', ring:'face', trap:'probe'},
+  scour:{riprap:'bed', nose:'flow', deep:'flow', spur:'flow', collar:'bed', trap:'bed'},
+  rock:{drain:'crack', cover:'crack', bolt:'joint', cut:'joint', anchor:'joint', trap:'joint'},
+  quay:{fill:'back', light:'back', relief:'tide', widen:'back', cap:'back', trap:'back'},
+  mono:{deep:'scpt', dia:'scpt', grout:'scpt', jacket:'met', scourp:'met', trap:'scpt'},
+  shaft:{relief:'piez', cutoff:'piez', grout:['piez','bore'], wet:'piez', rech:'piez', trap:'piez'}};
 /* 유혹의 선택지: 예산은 늘지만 안전율을 떨어뜨린다 */
 const TRAPS = {
   slope:{name:'사면 상부 가설도로', desc:'공사 차량용 도로를 사면 위에 낸다. 사면 상부에 하중 15 kPa', apply:s=>{s.q=(s.q||0)+15;}},
@@ -721,11 +881,17 @@ const TRAPS = {
   found:{name:'근입 얕게', desc:'기초 굴착량을 줄인다. 근입 깊이 −0.4 m', apply:s=>{s.Df=Math.max(0.3,s.Df-0.4);}},
   pile:{name:'말뚝 길이 단축', desc:'말뚝 자재비를 아낀다. 모래층 근입 −1.5 m', apply:s=>{s.Ls=Math.max(1,s.Ls-1.5);}},
   exc:{name:'장비 배면 배치', desc:'굴착 장비를 흙막이 바로 뒤에 세운다. 상재하중 +20 kPa', apply:s=>{s.q+=20;}},
-  tunnel:{name:'막장압 낮추기', desc:'굴진 속도를 올려 공기를 줄인다. 막장압 −30 kPa', apply:s=>{s.sT=Math.max(0,s.sT-30);}}};
+  tunnel:{name:'막장압 낮추기', desc:'굴진 속도를 올려 공기를 줄인다. 막장압 −30 kPa', apply:s=>{s.sT=Math.max(0,s.sT-30);}},
+  scour:{name:'교각 주변 골재 채취 허가', desc:'교각 근처 모래 채취를 허가해 수익을 얻는다. 근입깊이 −1 m', apply:s=>{s.Df=Math.max(2,+(s.Df-1).toFixed(1));}},
+  rock:{name:'발파 굴착', desc:'절벽 정리를 발파로 서두른다. 절리 점착력 −8 kPa', apply:s=>{s.c=Math.max(5,s.c-8);}},
+  quay:{name:'준설토 속채움', desc:'속채움을 값싼 준설토로 바꾼다. γc −1.5 kN/m³', apply:s=>{s.gc=+(s.gc-1.5).toFixed(1);}},
+  mono:{name:'근입 단축 시공', desc:'항타 시간을 줄인다. 근입 길이 −2 m', apply:s=>{s.L=Math.max(8,+(s.L-2).toFixed(1));}},
+  shaft:{name:'감압정 과다 양수', desc:'감압정을 최대로 돌려 공기를 줄인다. 피압수두 −3 m, 바깥 수위 −2 m', apply:s=>{s.hp=Math.max(4,s.hp-3); s.dd+=2; s.set=BOSSES.shaft.sett(s.dd);}}};
 for (const k of ORDER){ const t = TRAPS[k]; BOSSES[k].skills.push({id:'trap', trap:true, once:true, cost:0, gain:3, tag:'cut', name:'💸 ' + t.name, desc:t.desc + ' (예산 +3억)', apply:t.apply}); }
 const SV_TEST = {
   slope:{bore:'ds', piezo:'pump'}, piping:{bore:'gs', perm:'perm'}, wall:{sample:'ds', well:'pump'}, liq:{spt:'spt', well:'pump'},
-  consol:{oedo:'cc', plate:'plt'}, found:{plt:'plt', well:'pump'}, pile:{load:'plt', nsf:'cpt'}, exc:{vane:'vane', plan:'sand'}, tunnel:{probe:'cpt', face:'pi'}};
+  consol:{oedo:'cc', plate:'plt'}, found:{plt:'plt', well:'pump'}, pile:{load:'plt', nsf:'cpt'}, exc:{vane:'vane', plan:'sand'}, tunnel:{probe:'cpt', face:'pi'},
+  scour:{flow:'adcp', bed:'adcp'}, rock:{joint:'tilt', crack:'piez'}, quay:{back:'ds', tide:'piez'}, mono:{scpt:'cpt', met:'adcp'}, shaft:{piez:'piez', bore:'cc'}};
 const svTest = v => TESTS.find(t => t.id === (SV_TEST[BT.id]||{})[v.id]);
 const svLearned = v => { const t = svTest(v); return !t || (P.tests[t.id]||0) > 0; };
 function quizTest(T){ return new Promise(res => runTest(T, null, res)); }
@@ -886,6 +1052,9 @@ const NPC_LOOK = {
   p:{head:'none', hair:'bald', hairc:'#3a2a20', glasses:true, outfit:'suit', vest:'#4a5a8a', tie:'#f2c14e', acc:'tube'},
   u:{head:'bandana', hat:'#c0392b', beard:true, hairc:'#2a2018', outfit:'overalls', vest:'#7a5530', shirt:'#2f6fb5', wide:true, acc:'megaphone', skin:'#d9a479'},
   n:{head:'lamp', hat:'#3b8fd8', brim:'#2a6db0', outfit:'jacket', vest:'#2a3550', acc:'detector', brows:'#1b1410'},
+  i:{head:'helmet', hat:'#f4f6fa', brim:'#c9ced6', stripe:'#1f6f8b', outfit:'jacket', vest:'#1f6f8b', acc:'clipboard', glasses:true},
+  j:{head:'cap', hat:'#2a3550', brim:'#1b2233', beard:true, hairc:'#d9d9d9', outfit:'jacket', vest:'#2a3550', acc:'tablet', skin:'#d9a479'},
+  v:{head:'helmet', hat:'#f2c14e', brim:'#c9a227', stripe:'#5a3a7a', hair:'ponytail', hairc:'#2a2018', vest:'#5a3a7a', acc:'detector'},
   g:{head:'none', hair:'bald', hairc:'#5a4030', mustache:true, outfit:'apron', vest:'#e9eef7', apron:'#3a8a5a', wide:true, skin:'#e8b88a'}
 };
 function drawHero(c, x, y, dir, step, scale, job){ drawPerson(c, x, y, LOOK2[job || (P && P.job) || 'student'], dir, step, scale || 1); }
@@ -956,6 +1125,33 @@ function bossSprite0(id){
     R(10,8,44,22,'#7a4fb0'); R(6,14,8,10,'#6a3fa0'); R(50,14,8,10,'#6a3fa0'); R(16,4,6,6,'#9a6fd0'); R(42,4,6,6,'#9a6fd0');
     eye(20,14,'#f2c14e'); eye(40,14,'#f2c14e'); R(22,24,20,4,'#2a1a3a'); for (let i=0;i<5;i++) R(23+i*4,24,2,3,'#fff');
     R(4,30,6,14,'#5a3a80'); R(54,30,6,14,'#5a3a80'); R(14,56,36,6,'#4a3a2a'); break;
+  case 'scour':
+    for (let i=0;i<9;i++){ const x = 8 + i*5.5, y = 44 + Math.sin(i*0.9)*8; ell(x, y, 6, 5.5, i%2 ? '#2f7f96' : '#3a8fa8'); }
+    ell(54, 30, 9, 8, '#3a8fa8'); R(50,34,12,3,'#0b2b3a'); for (let i=0;i<3;i++) R(52+i*3,34,1,2,'#fff');
+    eye(50,25,'#f2c14e'); eye(56,25,'#f2c14e'); R(46,18,4,6,'#2f7f96'); R(44,40,3,3,'#bfe8f2'); R(18,30,2,2,'#bfe8f2'); R(30,56,2,2,'#bfe8f2');
+    for (let i=0;i<5;i++) R(10+i*9,52+Math.sin(i)*3,6,2,'#c9b48a'); break;
+  case 'rock':
+    c.fillStyle = '#6f675c'; c.beginPath(); c.moveTo(4,22); c.lineTo(16,30); c.lineTo(16,40); c.fill(); c.beginPath(); c.moveTo(60,22); c.lineTo(48,30); c.lineTo(48,40); c.fill();
+    R(18,20,28,32,'#8c8478'); R(22,8,20,16,'#9a9286'); R(20,6,4,6,'#7a7266'); R(40,6,4,6,'#7a7266');
+    eye(25,12,'#e5484d'); eye(35,12,'#e5484d'); R(27,20,10,2,'#3a342c'); for (let i=0;i<3;i++) R(28+i*3,20,1,2,'#fff');
+    R(24,28,1,12,'#5a5248'); R(25,38,6,1,'#5a5248'); R(38,30,1,10,'#5a5248');
+    R(18,52,10,10,'#7a7266'); R(36,52,10,10,'#7a7266'); R(12,34,6,14,'#7a7266'); R(46,34,6,14,'#7a7266'); break;
+  case 'quay':
+    ell(32,38,24,14,'#c0603a'); ell(32,34,20,10,'#d9774f'); R(14,28,6,2,'#f2a07a'); R(42,30,8,2,'#f2a07a');
+    R(4,14,12,10,'#c0603a'); R(2,10,6,6,'#d9774f'); R(10,10,6,6,'#d9774f'); R(48,14,12,10,'#c0603a'); R(48,10,6,6,'#d9774f'); R(56,10,6,6,'#d9774f');
+    R(12,24,4,8,'#a04f2e'); R(48,24,4,8,'#a04f2e'); R(24,20,2,8,'#a04f2e'); R(38,20,2,8,'#a04f2e');
+    eye(22,16,'#1d2c57'); eye(36,16,'#1d2c57'); R(26,40,12,2,'#5a2a18');
+    for (let i=0;i<3;i++){ R(8+i*5,48+i*3,8,2,'#a04f2e'); R(48-i*5,48+i*3,8,2,'#a04f2e'); } R(14,58,36,4,'#9aa0a8'); break;
+  case 'mono':
+    for (let i=0;i<6;i++){ const x = 8 + i*10; for (let j=0;j<5;j++) ell(x + Math.sin(j + i)*3, 40 + j*5, 3.5 - j*0.4, 3, j%2 ? '#4a3f98' : '#5a4fa8'); }
+    ell(32,24,18,16,'#5a4fa8'); ell(32,20,14,10,'#6a5fc0'); R(22,12,4,3,'#8a80d8');
+    eye(24,22,'#f2c14e'); eye(36,22,'#f2c14e'); R(28,32,8,3,'#2a1f58');
+    R(54,6,4,58,'#c9ced6'); R(52,4,8,4,'#f2c14e'); break;
+  case 'shaft':
+    ell(30,38,28,20,'#2a5a8a'); ell(30,44,22,10,'#9cc7e6'); R(4,22,10,10,'#2a5a8a'); R(50,24,12,8,'#244e78');
+    R(56,16,6,10,'#244e78'); R(58,30,6,10,'#244e78'); for (let i=0;i<5;i++) R(14+i*7,30,4,2,'#16365a');
+    eye(14,30,'#3ccf91'); eye(24,30,'#3ccf91'); R(10,40,18,3,'#0b1f33'); for (let i=0;i<4;i++) R(11+i*4,40,2,3,'#fff');
+    R(28,10,3,10,'#bfe8f2'); R(26,8,3,3,'#bfe8f2'); R(31,6,3,3,'#bfe8f2'); R(8,58,48,4,'#16365a'); break;
   }
   return cv;
 }
@@ -1087,7 +1283,7 @@ function renderHud(){
    <span class="stat">XP <span class="bar" style="width:70px"><i style="width:${P.lv>=MAXLV?100:clamp((P.xp-prev)/(need-prev),0,1)*100}%;background:var(--xp)"></i></span></span>
    <span class="stat">🏗${BT ? '공사 예산' : '전투 공사 예산'} <b style="color:var(--mp)">${BT ? BT.budget + '/' + BT.bud0 + '억' : maxBud() + '억'}</b></span>
    <span class="stat" title="활동비: 상점에서 장비를 산다">💰활동비 <b style="color:var(--gold)">${P.gold}만원</b> ☕<b>${P.items.coffee}</b> 📄<b>${P.items.fund}</b></span>
-   <span class="seals">${ORDER.map((k,i) => `<span class="${P.cleared.includes(k)?'on':''} ${i>=5?'c2':''}" title="${BOSSES[k].name}">${P.cleared.includes(k)?'★':'·'}</span>`).join('')}</span>
+   <span class="seals">${ORDER.map((k,i) => `<span class="${P.cleared.includes(k)?'on':''} ${i>=9?'c3':i>=5?'c2':''}" title="${BOSSES[k].name}">${P.cleared.includes(k)?'★':'·'}</span>`).join('')}</span>
    ${BT ? '' : `<button class="btn sm menu" id="btnMenu">메뉴${alert ? '<span class="sp">!</span>' : ''}</button>`}`;
   const m = $('btnMenu'); if (m) m.onclick = () => openMenu();
 }
@@ -1118,7 +1314,7 @@ const MAPS = [
 "^...k##.##.##.##.ck....^",
 "^...k##.##.##.##..k.p..^",
 "^...kkkkkkkk7kkkkkk....^",
-"^..........k......T....^",
+"^..........k......T...)^",
 "~~~~~~~~~~~b~~~~~~~~~~~~",
 "~~~~~~~~~~~b~~~~~~~~~~~~",
 "^..g..u....k.....^^^^^^^",
@@ -1126,7 +1322,23 @@ const MAPS = [
 "^..H.......kkkkkkkk9^^^^",
 "^..n....q..k.......^^^^^",
 "^<......c..k....T..^^^^^",
-"^^^^^^^^^^^^^^^^^^^^^^^^"], inn:[3,11]}
+"^^^^^^^^^^^^^^^^^^^^^^^^"], inn:[3,11]},
+ {name:'3장 · 부산 항만', tiles:[
+"^^^^^^^^^^^^^^^^^^^^^^^^",
+"~~~~~^^..T....^^^^^T..^^",
+"~~~~~..=..O..i....T....^",
+"~~~~~..=.kkkkkkkkkkkk..T",
+"~~Abb===.k.##.H.##.g.k..",
+"~~~~~..=.k.##.....##.k..",
+"~~~~~..=.k..v..q...j.k..",
+"~~~~~.(=.kkkkkkkkkkkkk..",
+"~~~~~~~~~kkkkkkkkkkk=c~~",
+"~~~~~~~~~~~C~~~~~~~~b~~~",
+"~~~~~~~~~~~~~~~~~~~~b~D~",
+"~~~~~~~~~~~~~~~^^..=..~~",
+"~~~~~~~~~~~~~~~^^.B..^~~",
+"~~~E~~~~~~~~~~~^^^^^^^~~",
+"~~~~~~~~~~~~~~~~~~~~~~~~"], inn:[14,4]}
 ];
 const MW = 24, MH = 15, TS = 16;
 const tile = (x,y) => (y<0||y>=MH||x<0||x>=MW) ? '^' : MAPS[P.map].tiles[y][x];
@@ -1159,7 +1371,8 @@ const NPCS = {
   p:{name:'정 기술사 (구조)', col:'#4a5a8a', hat:'#f2f2f2', lines:[
     '도시에 온 걸 환영하네. 이곳 괴물들은 들판의 녀석들보다 훨씬 질기지.',
     '기초는 지지력 안전율 3을 확보해야 해. 기초 폭을 넓히면 접지압이 줄고 Nγ 항도 커지지.',
-    '연약층을 관통한 말뚝엔 부마찰력이 걸려. 점토가 침하하면 말뚝을 아래로 끌어내리지. 역청 코팅이 특효약이야.']},
+    '연약층을 관통한 말뚝엔 부마찰력이 걸려. 점토가 침하하면 말뚝을 아래로 끌어내리지. 역청 코팅이 특효약이야.',
+    '도시의 네 현장을 모두 해결하면 동쪽 끝 항구에서 부산행 배를 탈 수 있다네. 바다와 강이 만드는 지반 문제가 기다리지.']},
   u:{name:'한 소장 (흙막이 현장)', col:'#8a4a3a', hat:'#f2c14e', lines:[
     '흙막이 굴착은 깊어질수록 바닥이 부풀어 올라. 점토 바닥 융기 안전율은 cu·Nc를 (γH + q)로 나눈 값이야.',
     '그 마왕은 매 턴 굴착을 진행시켜. 미리미리 보강해 두지 않으면 마지막에 무너진다고.']},
@@ -1167,12 +1380,25 @@ const NPCS = {
     '터널 막장은 안정수 N = (σv − σT)/cu 로 봐. 6을 넘으면 막장이 무너지지.',
     '막장압을 너무 올리면 지반이 위로 터져(blow-out). 갱내 배수는 지반을 단단하게 하지만, 지하수위가 내려가면 위쪽 점토가 압밀돼 지표가 가라앉아.',
     '그럴 땐 인공 함양으로 수위를 되살려. 안정성과 침하, 둘 다 잡아야 진짜 터널쟁이야.']},
+  i:{name:'강 부장 (항만공사)', col:'#1f6f8b', hat:'#f4f6fa', lines:[
+    '부산 항만에 온 걸 환영하네, {n}. 여긴 바다와 강이 함께 흙을 괴롭히는 곳이지.',
+    '서쪽 낙동강 하구 다리엔 세굴 뱀장어가, 북항 부두엔 케이슨 크랩이 있네. 남쪽 영도 태종대 절벽엔 낙석 가고일이 산다더군.',
+    '동쪽 바다 해상풍력 단지와 남서쪽 가덕 해저터널 수직구는 배가 있어야 갈 수 있어. 고무보트를 준비하게.',
+    '해저터널 수직구는 나머지 네 현장을 모두 해결해야 출입을 허가하겠네.']},
+  j:{name:'유 선장 (해양조사선)', col:'#2a3550', hat:'#f4f6fa', lines:[
+    '바로 위 해양조사센터에선 유속, 절리면, 피압수두를 직접 재는 법을 가르치지.',
+    '세굴은 유속이 빠르고 수심이 깊을수록 깊어져. 홍수 한 번에 교각 밑이 몇 미터씩 파이기도 하네.',
+    '해상풍력 말뚝은 바닥이 쓸려 나가면 근입이 짧아져. 세굴과 수평저항은 한 몸이야.']},
+  v:{name:'문 감리 (해저터널)', col:'#5a3a7a', hat:'#f2c14e', lines:[
+    '수직구 바닥 아래에는 바다와 이어진 피압 모래층이 있어. 바닥 점토가 얇아지면 아래 물이 밀어 올리지.',
+    '감압정으로 수압을 낮추면 FS는 오르지만, 주변 지하수위도 내려가 연약 점토가 가라앉아. 부두에 금이 가면 끝이야.',
+    '차수벽, 저면 그라우팅, 수중 굴착, 인공 함양… 여러 수를 섞어서 안정과 침하를 둘 다 잡아야 해.']},
   g:{name:'자재상 최 사장', col:'#8a5a22', hat:'#e5484d', kind:'shop', menu:'shop'},
   q:{name:'현장 의뢰 게시판', kind:'board', menu:'quest'}
 };
-const CHESTS = {'0:22,13':['gold',1000], '0:3,3':['coffee'], '0:21,5':['fund'], '0:2,11':['coffee'], '1:17,3':['gold',300], '1:8,13':['fund']};
+const CHESTS = {'0:22,13':['gold',1000], '0:3,3':['coffee'], '0:21,5':['fund'], '0:2,11':['coffee'], '1:17,3':['gold',300], '1:8,13':['fund'], '2:21,8':['gold',800]};
 const ITEMN = {coffee:'캔커피 ☕ (체력 +40)', fund:'예비비 증서 📄 (전투 중 예산 +5억)'};
-const walkable = (x,y) => { const t = tile(x,y); return '.=smbHck123456789<>PXLF'.includes(t) || (t === '~' && P && owns('boat')); };
+const walkable = (x,y) => { const t = tile(x,y); return '.=smbHck123456789ABCDE<>()PXLFO'.includes(t) || (t === '~' && P && owns('boat')); };
 const W = { cv:null, c:null, moving:null, path:[], busy:false, frame:0, pendingTalk:null };
 
 /* ===== 고해상도 타일 (반 픽셀 단위 디테일) ===== */
@@ -1218,7 +1444,10 @@ function drawTile(c, ch, x, y, t){
       c.fillStyle= ch === 'H' ? '#c0392b' : '#2c6fbf'; c.beginPath(); c.moveTo(X+1.5,Y+8); c.lineTo(X+8,Y+2); c.lineTo(X+14.5,Y+8); c.fill();
       for (let i=0;i<3;i++) Q(4+i*3, 5+(i%2), 2, 0.5, 'rgba(0,0,0,.2)');
       Q(7,10,2.5,5,'#6b4a2a'); Q(8.8,12.5,0.5,0.5,'#f2c14e'); Q(4,9.5,2.5,2,'#7fb2d9'); Q(4,9.5,2.5,0.5,'#cfe6f5'); Q(10.5,9.5,2,2,'#7fb2d9'); break;
-    case '>': case '<': Q(0,0,TS,TS, ch === '>' ? '#e3d39a' : '#6aa64e'); Q(0.5,7.5,15,7,'#1b2233'); Q(1,8,14,6,'#7d5528'); Q(1,8,14,1,'#a8783f');
+    case 'A': case 'C': case 'D': case 'E': drawTile(c, '~', x, y, t); break;
+    case 'O': grass(); Q(0.5,6.5,15,9,'#1b2233'); Q(1,7,14,8,'#dfe7ef'); Q(1,5,14,3,'#1f6f8b'); Q(1,5,14,0.5,'#4aa3c9');
+      Q(6,10,4,5,'#6b4a2a'); Q(2.5,9,2.5,2.5,'#7fb2d9'); Q(11,9,2.5,2.5,'#7fb2d9'); Q(7.5,0.5,1,5,'#555'); Q(5,1,6,1,'#3ccf91'); Q(4,2.5,8,0.5,'#3ccf91'); break;
+    case '>': case '<': case '(': case ')': Q(0,0,TS,TS, ch === '>' ? '#e3d39a' : '#6aa64e'); Q(0.5,7.5,15,7,'#1b2233'); Q(1,8,14,6,'#7d5528'); Q(1,8,14,1,'#a8783f');
       Q(3,4,10,4.5,'#e6ddcf'); Q(3,4,10,0.5,'#fff'); Q(4.5,5,1.5,1.5,'#7fb2d9'); Q(7.5,5,1.5,1.5,'#7fb2d9'); Q(7,1,1,3.5,'#555'); Q(8,1,4,2,'#e5484d'); break;
     case 'L': grass(); Q(0.5,4.5,15,11,'#1b2233'); Q(1,5,14,10,'#dfe7ef'); Q(1,3,14,3,'#2c6fbf'); Q(1,3,14,0.5,'#5a93d8');
       Q(6,9,4,6,'#6b4a2a'); Q(2.5,7,2.5,2.5,'#7fb2d9'); Q(11,7,2.5,2.5,'#7fb2d9'); Q(7,0,2,3,'#3ccf91'); Q(6,1.5,4,1,'#3ccf91'); Q(7.5,0.5,1,1,'#bff5df'); break;
@@ -1230,9 +1459,11 @@ function drawTile(c, ch, x, y, t){
   }
 }
 
-function siteState(n){ const id = ORDER[n-1]; const cleared = P.cleared.includes(id); const open = n === 1 || P.cleared.includes(ORDER[n-2]); return {id, cleared, open}; }
+const SITE_CH = '123456789ABCDE', siteN = ch => (ch && ch.length === 1) ? SITE_CH.indexOf(ch) + 1 : 0;
+function siteState(n){ const id = ORDER[n-1], cleared = P.cleared.includes(id);
+  const open = n === 1 || (CH3.includes(id) ? (id !== 'shaft' || CH3.slice(0,4).every(k => P.cleared.includes(k))) : P.cleared.includes(ORDER[n-2])); return {id, cleared, open}; }
 function drawSite(c, x, y, t){
-  const n = +tile(x,y), {id, cleared, open} = siteState(n), X = x*TS, Y = y*TS, B = BOSSES[id];
+  const n = siteN(tile(x,y)), {id, cleared, open} = siteState(n), X = x*TS, Y = y*TS, B = BOSSES[id];
   const bob = Math.sin(t/10 + n) > 0 ? 1 : 0;
   px(c,X+3,Y+2,1,13,'#4a3a2a'); px(c,X+4,Y+2+bob,8,5, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86');
   c.fillStyle = cleared ? '#1f7a54' : open ? B.color : '#55575d'; c.beginPath(); c.arc(X+10,Y+12,4,0,7); c.fill();
@@ -1241,21 +1472,22 @@ function drawSite(c, x, y, t){
 }
 function fillerTile(x, y){
   const cx = Math.max(0, Math.min(MW-1, x)), cy = Math.max(0, Math.min(MH-1, y)), e = MAPS[P.map].tiles[cy][cx];
-  if ('~sb>'.includes(e)) return '~';
+  if ('~sb>)(ACDE'.includes(e)) return '~';
   if (e === '^') return '^';
   if (e === '#') return (Math.abs(x-cx) + Math.abs(y-cy)) > 2 ? 'T' : '#';
   return 'T';
 }
 /* ===== 길안내: 이름표 · 목표 · 미니맵 ===== */
-const PLACE_TAG = {L:'🔬 토질 실험실', F:'🚜 현장시험센터', H:'☕ 현장사무소', '>':'⛴ 항구', '<':'⛴ 항구'};
+const PLACE_TAG = {L:'🔬 토질 실험실', F:'🚜 현장시험센터', O:'🌊 해양조사센터', H:'☕ 현장사무소', '>':'⛴ 항구', '<':'⛴ 항구', ')':'⛴ 부산행 항구', '(':'⛴ 항구'};
 const NPC_TAG = {g:'🛒 자재상', q:'📋 의뢰 게시판'};
 function findTile(ch){ const T = MAPS[P.map].tiles; for (let y=0;y<T.length;y++){ const x = T[y].indexOf(ch); if (x >= 0) return [x,y]; } return null; }
 function currentGoal(){
-  for (let n=1;n<=9;n++){ const id = ORDER[n-1]; if (P.cleared.includes(id)) continue; const pos = findTile(String(n));
+  for (let n=1;n<=ORDER.length;n++){ const id = ORDER[n-1]; if (P.cleared.includes(id) || !siteState(n).open) continue; const pos = findTile(SITE_CH[n-1]);
     if (!pos) continue; const B = BOSSES[id], need = (typeof SITE_REQ !== 'undefined' && SITE_REQ[id] && !owns(SITE_REQ[id])) ? ` (${itemName(SITE_REQ[id])} 필요)` : '';
     return {pos, text:`🎯 다음 목표: ${B.name}${need}`}; }
   if (P.map === 0 && ORDER.slice(0,5).every(k => P.cleared.includes(k)) && !P.cleared.includes(ORDER[5])){ const pos = findTile('>');
     return {pos, text: owns('ticket') ? '🎯 다음 목표: 동쪽 항구에서 도시로' : '🎯 다음 목표: 🎫 승선권을 사서 동쪽 항구로'}; }
+  if (P.map === 1 && CH2.every(k => P.cleared.includes(k)) && !CH3.every(k => P.cleared.includes(k))) return {pos: findTile(')'), text:'🎯 다음 목표: 동쪽 항구에서 부산행 배'};
   return {pos:null, text:'🎯 모든 현장 해결! 메뉴의 현장 의뢰로 실력을 쌓자'};
 }
 function tagAt(c, x, y, text, col){ (W.tags || (W.tags = [])).push([x, y, text, col]); }
@@ -1270,7 +1502,7 @@ function drawWorldTags(c, x0, y0, x1, y1){
     const ch = tile(x,y);
     if (PLACE_TAG[ch]) tagAt(c, x, y, PLACE_TAG[ch], ch === 'L' ? '#4aa3ff' : ch === 'F' ? '#ff8a1f' : '#f2c14e');
     else if (NPC_TAG[ch]) tagAt(c, x, y, NPC_TAG[ch], '#3ccf91');
-    else if ('123456789'.includes(ch)){ const {id, cleared, open} = siteState(+ch); tagAt(c, x, y, (cleared ? '✓ ' : open ? '⚔ ' : '🔒 ') + BOSSES[id].name, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86'); }
+    else if (siteN(ch)){ const {id, cleared, open} = siteState(siteN(ch)); tagAt(c, x, y, (cleared ? '✓ ' : open ? '⚔ ' : '🔒 ') + BOSSES[id].name, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86'); }
   }
   return goal;
 }
@@ -1316,8 +1548,8 @@ function drawMiniMap(goal){
   const dot = (x, y, col, r) => { c.fillStyle = '#1b2233'; c.beginPath(); c.arc(x*MM + MM/2, y*MM + MM/2, r + 1, 0, 7); c.fill(); c.fillStyle = col; c.beginPath(); c.arc(x*MM + MM/2, y*MM + MM/2, r, 0, 7); c.fill(); };
   for (let y=0;y<MH;y++) for (let x=0;x<MW;x++){ const ch = T[y][x];
     if (ch === 'L') dot(x,y,'#4aa3ff',2.2); else if (ch === 'F') dot(x,y,'#ff8a1f',2.2); else if (ch === 'H') dot(x,y,'#f4f6fa',2);
-    else if (ch === 'g' || ch === 'q') dot(x,y,'#3ccf91',1.8); else if (ch === '>' || ch === '<') dot(x,y,'#c9ced6',1.8);
-    else if ('123456789'.includes(ch)){ const {cleared, open} = siteState(+ch); dot(x,y, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86', 2); } }
+    else if (ch === 'g' || ch === 'q') dot(x,y,'#3ccf91',1.8); else if ('><)('.includes(ch)) dot(x,y,'#c9ced6',1.8); else if (ch === 'O') dot(x,y,'#3fb6c9',2.2);
+    else if (siteN(ch)){ const {cleared, open} = siteState(siteN(ch)); dot(x,y, cleared ? '#3ccf91' : open ? '#e5484d' : '#7d7f86', 2); } }
   if (goal.pos && Math.floor(W.frame/15) % 2){ c.strokeStyle = '#f2c14e'; c.lineWidth = 1.2; c.strokeRect(goal.pos[0]*MM - 1.5, goal.pos[1]*MM - 1.5, MM + 3, MM + 3); }
   dot(P.x, P.y, Math.floor(W.frame/10) % 2 ? '#f2c14e' : '#fff', 2);
 }
@@ -1362,7 +1594,7 @@ function renderWorld(){
     if (x < 0 || y < 0 || x >= MW || y >= MH){ drawTile(c, fillerTile(x, y), x, y, t); continue; }
     const ch = tile(x,y), npc = NPCS[ch];
     drawTile(c, npc ? ('k='.includes(tile(x-1,y)) && 'k='.includes(tile(x+1,y)) ? tile(x-1,y) : '.') : ch, x, y, t);
-    if ('123456789'.includes(ch)) drawSite(c, x, y, t);
+    if (siteN(ch)) drawSite(c, x, y, t);
     if (ch === 'c'){ const opened = P.chests.includes(P.map+':'+x+','+y); drawTile(c, P.map && tile(x+1,y)==='k' ? 'k' : '.', x, y, t);
       const X = x*TS, Y = y*TS; c.fillStyle = '#1b2233'; c.fillRect(X+2.5, Y+(opened?3.5:5.5), 11, opened?11:9.5);
       c.fillStyle = '#8a5a22'; c.fillRect(X+3, Y+7, 10, 7); c.fillStyle = '#a8783f'; c.fillRect(X+3, Y+(opened?4:6), 10, opened?2:3);
@@ -1393,15 +1625,16 @@ function stepTo(dx, dy){
 }
 async function onArrive(){
   const ch = tile(P.x, P.y);
-  if ('123456789'.includes(ch)){ W.path = []; held = null; return enterSite(+ch); }
+  if (siteN(ch)){ W.path = []; held = null; return enterSite(siteN(ch)); }
   if (ch === 'H'){ W.path = []; held = null; W.busy = true; P.hp = maxHp(); save(); renderHud(); await talk(['현장사무소에서 따뜻한 커피를 마셨다. 체력이 모두 회복되고 진행 상황이 저장되었다.'], '현장사무소'); W.busy = false; return; }
   if (ch === 'c'){ const k = P.map+':'+P.x+','+P.y; if (!P.chests.includes(k)){ W.path = []; held = null; W.busy = true; P.chests.push(k); const [it, n] = CHESTS[k] || ['coffee'];
       let txt; if (it === 'gold'){ P.gold += n; txt = `상자 안에 ${n}만원이 들어 있었다!`; } else { P.items[it]++; txt = `${ITEMN[it]}을(를) 얻었다!`; }
       save(); renderHud(); await talk([txt]); W.busy = false; } return; }
-  if (ch === '>' || ch === '<'){ W.path = []; held = null; return portal(ch); }
+  if ('><)('.includes(ch)){ W.path = []; held = null; return portal(ch); }
   if (ch === 'X'){ W.path = []; held = null; return enterSecret(); }
   if (ch === 'L'){ W.path = []; held = null; return openTests('lab'); }
   if (ch === 'F'){ W.path = []; held = null; return openTests('field'); }
+  if (ch === 'O'){ W.path = []; held = null; return openTests('sea'); }
   if (W.pendingTalk && !W.path.length){ const t = W.pendingTalk; W.pendingTalk = null; return talkNPC(t); }
   if (!W.path.length || true) maybeEncounter(ch);
 }
@@ -1412,9 +1645,14 @@ async function portal(ch){
     if (!owns('ticket')){ await talk(['“인장은 충분하군. 그런데 승선권이 없잖나? 메뉴의 상점에서 승선권(300만원)을 사 오게.”'], '항구 선장'); W.busy = false; return; }
     const k = await ask('도시행 배에 탈까?', ['출항!','나중에'], '항구 선장'); hideMsg();
     if (k === 0){ P.map = 1; P.x = 2; P.y = 13; P.dir = 'r'; save(); setMapTag(); if (!P.seen2){ P.seen2 = 1; await talk(['배가 도시 항구에 닿았다. 고층 빌딩 아래, 지하에서 낯선 기운이 꿈틀댄다.', '여기서부터 2장이다. 괴물들이 훨씬 강하니 장비와 스킬을 갖추자.']); } }
+  } else if (ch === ')'){
+    if (!CH2.every(k => P.cleared.includes(k))){ await talk(['부산행 배다. 선장이 말한다. “도시의 네 현장을 모두 해결한 기술자만 부산 항만에 들어갈 수 있소.”'], '항구 선장'); W.busy = false; return; }
+    const k = await ask('부산행 배에 탈까?', ['출항!','나중에'], '항구 선장'); hideMsg();
+    if (k === 0){ P.map = 2; P.x = 7; P.y = 7; P.dir = 'r'; save(); setMapTag(); if (!P.seen3){ P.seen3 = 1; await talk(['배가 부산 항만에 닿았다. 짠 바닷바람 속에서 강과 바다가 흙을 깎아 내는 소리가 들린다.', '여기서부터 3장이다. 물과 바다가 만드는 지반 문제를 풀어 보자. 위쪽 해양조사센터에서 새 시험도 배울 수 있다.']); } }
   } else {
-    const k = await ask('들판으로 돌아가는 배에 탈까?', ['출항!','나중에'], '항구 선장'); hideMsg();
-    if (k === 0){ P.map = 0; P.x = 22; P.y = 9; P.dir = 'l'; save(); setMapTag(); }
+    const back = ch === '(' ? {q:'도시로 돌아가는 배에 탈까?', m:1, x:21, y:6} : {q:'들판으로 돌아가는 배에 탈까?', m:0, x:22, y:9};
+    const k = await ask(back.q, ['출항!','나중에'], '항구 선장'); hideMsg();
+    if (k === 0){ P.map = back.m; P.x = back.x; P.y = back.y; P.dir = 'l'; save(); setMapTag(); }
   }
   W.busy = false;
 }
@@ -1428,7 +1666,7 @@ function facingNPC(){ const d = {u:[0,-1], d:[0,1], l:[-1,0], r:[1,0]}[P.dir]; c
 async function enterSite(n){
   const {id, cleared, open} = siteState(n), B = BOSSES[id];
   W.busy = true;
-  if (!open){ await talk([n === 1 ? '“현장시험 수료증이 없으면 현장에 들어갈 수 없네. 1단계 실험실, 2단계 현장시험센터부터 마치고 오게.”' : `출입 통제 중인 현장이다. 먼저 “${BOSSES[ORDER[n-2]].name}”을(를) 해결하고 오자.`], '현장 경비'); W.busy = false; return; }
+  if (!open){ await talk([n === 1 ? '“현장시험 수료증이 없으면 현장에 들어갈 수 없네. 1단계 실험실, 2단계 현장시험센터부터 마치고 오게.”' : (id === 'shaft' ? '출입 통제 중인 현장이다. 부산 항만의 다른 네 현장을 먼저 해결하고 오자.' : `출입 통제 중인 현장이다. 먼저 “${BOSSES[ORDER[n-2]].name}”을(를) 해결하고 오자.`)], '현장 경비'); W.busy = false; return; }
   if (SITE_REQ[id] && !owns(SITE_REQ[id])){ await talk([`“${itemName(SITE_REQ[id])} 없이는 이 현장에 들어갈 수 없습니다. 안전 규정입니다.”`, '메뉴의 장비·상점에서 구할 수 있다.'], '현장 안전관리자'); W.busy = false; return; }
   if (cleared){ const k = await ask(`${B.name}은(는) 이미 해결한 현장이다. 연습 삼아 다시 도전할까? (경험치·골드 1/4)`, ['다시 도전','그만두기']); hideMsg(); if (k !== 0){ W.busy = false; return; } }
   else { for (const l of B.intro) await say(l, B.name); const k = await ask(`${B.name}과(와) 맞설까?`, ['전투 시작','나중에']); hideMsg(); if (k !== 0){ W.busy = false; return; } }
@@ -1485,10 +1723,20 @@ const TESTS = [
  {id:'pump', kind:'field', name:'양수시험', icon:'🚰', gen(){ const r1 = rf(5,15,1), r2 = rf(30,60,1), h1 = rf(8,12,2), h2 = +(h1 + rr(0.5,1.5)).toFixed(2), k = rr(1,9)*1e-4, Q = k*Math.PI*(h2*h2 - h1*h1)/Math.log(r2/r1);
    return {html:`비피압 대수층에서 일정 유량으로 양수하며 관측정 두 곳의 수위를 쟀다 (불투수층 기준 수위).<table class="dtab"><tr><td>양수량 Q</td><td>${fx(Q*1000,3)} L/s</td></tr><tr><td>관측정 1: r₁, h₁</td><td>${r1} m, ${h1} m</td></tr><tr><td>관측정 2: r₂, h₂</td><td>${r2} m, ${h2} m</td></tr></table>`,
      q:'투수계수 k (×10⁻⁴ m/s)', ans:Q*Math.log(r2/r1)/(Math.PI*(h2*h2 - h1*h1))*1e4, tol:0.04, f:'k = Q·ln(r₂/r₁) ÷ [π(h₂² − h₁²)] (Q는 m³/s로)'}; }}];
+TESTS.push(
+ {id:'adcp', kind:'sea', name:'유속·수심 측정 (ADCP)', icon:'🌊', gen(){ const Bw = Math.round(rr(80,140)), y = rf(3,7,1), Q = Math.round(rr(1.2,3.0)*Bw*y);
+   return {html:`ADCP(초음파 유속계)를 실은 보트로 강을 가로지르며 유량과 단면을 쟀다.<table class="dtab"><tr><td>유량 Q</td><td>${Q} m³/s</td></tr><tr><td>수면 폭 B</td><td>${Bw} m</td></tr><tr><td>평균 수심 y</td><td>${y} m</td></tr></table>`,
+     q:'평균 유속 V (m/s)', ans:Q/(Bw*y), tol:0.03, f:'V = Q ÷ (B·y)'}; }},
+ {id:'tilt', kind:'sea', name:'절리면 경사시험', icon:'🪨', gen(){ const phi = rr(28,40), tr = [0,1,2].map(() => +(phi + rr(-1.2,1.2)).toFixed(1));
+   return {html:`절리면이 붙은 암석 코어 두 조각을 포개고, 판을 천천히 기울여 위 조각이 미끄러지는 각도를 세 번 쟀다.<table class="dtab"><tr><th>시험</th><th>미끄러짐 각도</th></tr>${tr.map((a,i) => `<tr><td>${i+1}회</td><td>${a}°</td></tr>`).join('')}</table>`,
+     q:'절리면 기본 마찰각 φ<sub>b</sub> (°)', ans:(tr[0] + tr[1] + tr[2])/3, tol:0.7, abs:true, f:'φ<sub>b</sub> = 미끄러짐 각도의 평균 (점착력 0인 절리면에서 tanφ = tan α)'}; }},
+ {id:'piez', kind:'sea', name:'피압수두 측정', icon:'📏', gen(){ const za = rf(15,25,1), dw = rf(-1.5,3,2);
+   return {html:`피압 모래층까지 스탠드파이프 피에조미터를 설치하고 관 속 수위를 읽었다. (수위 깊이가 음수면 물이 지표 위로 솟아오른 것)<table class="dtab"><tr><td>모래층 윗면 깊이</td><td>${za} m</td></tr><tr><td>관 속 수위 깊이 (지표 기준)</td><td>${dw} m</td></tr></table>`,
+     q:'모래층 윗면 기준 피압수두 h<sub>p</sub> (m)', ans:za - dw, tol:0.03, f:'h<sub>p</sub> = 모래층 윗면 깊이 − 관 속 수위 깊이'}; }});
 const labDone = k => TESTS.filter(t => t.kind === k).every(t => (P.tests[t.id]||0) > 0);
 const LAB_SV = new Set(['bore','sample','oedo','perm']);
 const passedN = k => TESTS.filter(t => t.kind === k && (P.tests[t.id]||0) > 0).length;
-const STAGE = {lab:{n:'실내시험 수료', seal:'🔬'}, field:{n:'현장시험 수료', seal:'🚜'}};
+const STAGE = {lab:{n:'실내시험 수료', seal:'🔬'}, field:{n:'현장시험 수료', seal:'🚜'}, sea:{n:'해양조사 수료', seal:'🌊'}};
 /* ===== 실험 미니게임 정의 ===== */
 const MG = {};   // 손 실험 미니게임은 사용하지 않는다 (절차 퍼즐 → 결과 판정)
 const GRADES = [['S','#f2c14e',1.6],['A','#3ccf91',1.3],['B','#4aa3ff',1],['C','#a9b6cf',0.5],['D','#e5484d',0]];
@@ -1579,8 +1827,8 @@ function runMG(m){
 let labTab = 'test';
 function openTests(kind, tab){
   held = null; W.path = []; const S = labStat(); if (tab) labTab = tab; if (kind !== 'lab' && labTab === 'uscs') labTab = 'test';
-  const list = TESTS.filter(t => t.kind === kind), title = kind === 'lab' ? '🔬 태초마을 토질 실험실' : '🚜 현장시험센터';
-  const n = passedN(kind), need = 4, clr = P.stg[kind];
+  const list = TESTS.filter(t => t.kind === kind), title = kind === 'lab' ? '🔬 태초마을 토질 실험실' : kind === 'sea' ? '🌊 부산 해양조사센터' : '🚜 현장시험센터';
+  const n = passedN(kind), need = Math.min(4, list.length), clr = P.stg[kind];
   const stageBox = clr ? `<p style="color:var(--gold)"><b>★ ${STAGE[kind].n} 완료!</b></p>`
     : n >= need ? `<div class="row" style="justify-content:flex-start;margin:8px 0"><button class="btn gold" id="tFinal">★ 최종 시험 도전 (무작위 3문제 연속 합격)</button></div>`
     : `<p class="note">시험 ${need}종 이상 합격하면 <b>최종 시험</b>에 도전할 수 있다 (현재 ${n}/${need}).</p>`;
@@ -1601,7 +1849,7 @@ function bindLabHead(kind){
 }
 async function clearStage(kind){
   P.stg[kind] = true; P.gold += 150; const ev = gainXP(60); save(); renderHud(); syncRank();
-  $('modalBody').innerHTML = `<h2>★ ${STAGE[kind].n}!</h2><p>${kind === 'lab' ? '실내시험 수료증을 받았다. 흙의 기본 성질을 숫자로 말할 수 있게 됐다.' : '현장시험 수료증을 받았다. 이제 진짜 현장에 나갈 차례다!'}</p>
+  $('modalBody').innerHTML = `<h2>★ ${STAGE[kind].n}!</h2><p>${kind === 'sea' ? '해양조사 수료증을 받았다. 물과 바다가 만드는 지반 문제를 직접 잴 수 있게 됐다.' : kind === 'lab' ? '실내시험 수료증을 받았다. 흙의 기본 성질을 숫자로 말할 수 있게 됐다.' : '현장시험 수료증을 받았다. 이제 진짜 현장에 나갈 차례다!'}</p>
     <div class="reward"><span>EXP +60</span><span>+150만원</span>${ev.map(e => `<span>${e}</span>`).join('')}</div>
     <div class="row" style="justify-content:flex-end"><button class="btn gold" id="tOk">계속</button></div>`;
   $('tOk').onclick = () => { closeModal(); renderHud(); };
@@ -1672,6 +1920,24 @@ const LABX = {
     interp(r){ const h = rr(2,4).toFixed(1), qa = 5.14*r/3; return pick([
       {q:`비배수 전단강도 cu = ${r.toFixed(1)} kPa. 이 점토의 연경도는?`, o:['연약 (< 25 kPa)','중간 (25~50 kPa)','단단 (> 50 kPa)'], a: r < 25 ? 0 : r <= 50 ? 1 : 2, why:'cu로 연경도를 바로 판정할 수 있다.'},
       {q:`cu = ${r.toFixed(1)} kPa 점토 위에 높이 ${h} m 성토(약 ${(19*h).toFixed(0)} kPa)를 한 번에 쌓아도 될까? (허용 ≈ 5.14cu/3)`, o:['괜찮다','안 된다, 단계 성토가 필요'], a: 19*h <= qa ? 0 : 1, why:`허용 지지력 ≈ ${qa.toFixed(0)} kPa.`}]); }},
+  adcp:{unit:'m/s', dp:2, steps:[
+    {q:'ADCP 보트는 어떻게 운항할까?', o:[OPT('느리고 일정한 속도로 강을 가로지른다', 1), OPT('최대 속도로 한 번에 지나간다', 0, -0.12, '배가 너무 빨라 바닥 추적이 끊겨 유량이 작게 나왔다.')]},
+    {q:'몇 번 횡단할까?', o:[OPT('왕복 2회 이상 재서 평균', 1), OPT('한 번이면 충분', 0, 0.08, '한 번의 측정에 난류 요동이 그대로 들어갔다.')]},
+    {q:'센서 깊이 보정은?', o:[OPT('센서가 잠긴 깊이를 수심에 더해 보정', 1), OPT('보정하지 않는다', 0, 0.1, '수심이 작게 잡혀 유속이 크게 계산됐다.')]}],
+    interp(r){ const y = +rr(0.3,1.5).toFixed(1), Fr = r/Math.sqrt(GW*y);
+      return {q:`평균 유속 V = ${r.toFixed(2)} m/s인 흐름이 수심 ${y} m인 여울을 지난다. 흐름 상태는? (Fr = V ÷ √(g·y))`, o:['상류 (Fr < 1, 잔잔한 흐름)','사류 (Fr > 1, 빠르고 얕은 흐름)'], a: Fr < 1 ? 0 : 1, why:`Fr = ${r.toFixed(2)} ÷ √(9.81 × ${y}) = ${Fr.toFixed(2)}. Fr이 1보다 크면 사류, 작으면 상류다.`}; }},
+  tilt:{unit:'°', dp:1, steps:[
+    {q:'시료는 어떻게 준비할까?', o:[OPT('절리면이 그대로 붙은 코어 두 조각을 맞대어 놓는다', 1), OPT('절리면을 매끈하게 갈아 낸다', 0, -0.15, '거칠기가 사라져 마찰각이 작게 나왔다.')]},
+    {q:'판을 기울이는 속도는?', o:[OPT('천천히 일정하게', 1), OPT('빠르게 툭 기울인다', 0, -0.08, '충격으로 블록이 일찍 미끄러졌다.')]},
+    {q:'몇 번 시험할까?', o:[OPT('여러 번 반복해 평균', 1), OPT('한 번만', 0, 0.06, '한 번의 값이 우연히 컸다.')]}],
+    interp(r){ let psi = Math.round(rr(25,45)); if (Math.abs(psi - r) < 2) psi += psi > r ? 3 : -3;
+      return {q:`마찰각 φ = ${r.toFixed(1)}°인 절리면이 ${psi}° 기울어 절벽 밖으로 드러나 있다. 점착력과 물이 없을 때 이 블록은?`, o:['미끄러지지 않는다','미끄러진다'], a: psi < r ? 0 : 1, why:`점착력과 수압이 없으면 FS = tanφ ÷ tanψ. 절리 경사 ${psi}°가 마찰각 ${r.toFixed(1)}°보다 ${psi < r ? '완만해 버틴다' : '가팔라 미끄러진다'}.`}; }},
+  piez:{unit:'m', dp:2, steps:[
+    {q:'피에조미터 스크린(측정부)은 어디에?', o:[OPT('피압 모래층 안', 1), OPT('위쪽 점토층 안', 0, -0.2, '점토층 수압을 재서 피압수두가 작게 나왔다.')]},
+    {q:'스크린 위 공간은?', o:[OPT('벤토나이트로 밀봉한다', 1), OPT('모래로 채운다', 0, -0.1, '위쪽 물이 섞여 들어 수두가 흐려졌다.')]},
+    {q:'언제 읽을까?', o:[OPT('수위가 안정된 뒤, 조석 영향은 여러 번 읽어 평균', 1), OPT('설치 직후 바로', 0, -0.15, '수위가 다 올라오기 전에 읽었다.')]}],
+    interp(r){ const D = Math.round(rr(8,16)), fs = 18*D/(GW*r);
+      return {q:`피압수두 h<sub>p</sub> = ${r.toFixed(2)} m. 수직구 바닥 아래 점토 두께 D = ${D} m (γ<sub>t</sub> 18 kN/m³)일 때 바닥은? (기준 FS 1.2)`, o:['안전하다 (FS ≥ 1.2)','감압이나 보강이 필요하다 (FS < 1.2)'], a: fs >= 1.2 ? 0 : 1, why:`FS = 18 × ${D} ÷ (9.81 × ${r.toFixed(2)}) = ${fs.toFixed(2)}.`}; }},
   pump:{unit:'×10⁻⁴ m/s', dp:2, steps:[
     {q:'양수 방법은?', o:[OPT('일정 유량으로, 수위가 안정될 때까지', 1), OPT('유량을 수시로 바꾼다', 0, 0.3, '정상 상태가 아니라 계산이 틀어졌다.')]},
     {q:'관측정 위치는?', o:[OPT('양수정에서 거리가 다른 두 곳', 1), OPT('같은 거리 두 곳', 0, -0.4, '두 관측정 수위 차이로 k를 구할 수 없었다.')]}],
@@ -1815,8 +2081,11 @@ function drawPChart(cv, LL, PI){
    ========================================================= */
 const SYM = {beta:'β', z:'z', c:'c′', phi:'φ′', m:'m', q:'q', cover:'표면 보호', dh:'Δh', D:'D', gs:'γ′', grout:'차수 커튼', B:'B', H:'H', hw:'h<sub>w</sub>', mu:'μ', T:'T', gam:'γ', drain:'배수공',
   N:'N', wt:'d<sub>w</sub> (수위 깊이)', mul:'CRR 배율', add:'ΔCRR', load:'설계 성토하중', pre:'선행재하', vac:'진공압', pvd:'PVD 간격', mat:'샌드매트', Df:'D<sub>f</sub>', dw:'d<sub>w</sub>', Q:'Q',
-  Ls:'L<sub>s</sub>', qb:'q<sub>b</sub>', fill:'성토하중', coat:'코팅 계수', share:'하중 분담률', d:'근입 d', cu:'c<sub>u</sub>', berm:'소단 효과', sT:'σ<sub>T</sub>', Nk:'N<sub>k</sub>', set:'지표 침하', gamma:'γ'};
-const HIDE_OF = {slope:{c:'c',phi:'phi',m:'m'}, piping:{gs:'gs'}, wall:{phi:'phi',mu:'mu',hw:'hw'}, liq:{N:'N',wt:'wt',mul:'N',add:'N'}, found:{phi:'phi',c:'c',dw:'dw'}, pile:{beta:'beta',coat:'beta'}, exc:{cu:'cu',gam:'gam'}, tunnel:{cu:'cu',Nk:'Nk'}, consol:{cv:'cv'}};
+  Ls:'L<sub>s</sub>', qb:'q<sub>b</sub>', fill:'성토하중', coat:'코팅 계수', share:'하중 분담률', d:'근입 d', cu:'c<sub>u</sub>', berm:'소단 효과', sT:'σ<sub>T</sub>', Nk:'N<sub>k</sub>', set:'지표 침하', gamma:'γ',
+  a:'a', y1:'y₁', V:'V', K1:'K₁', prot:'보호공 감소계수', pf:'ψ<sub>f</sub>', pp:'ψ<sub>p</sub>', zw:'z<sub>w</sub>', gr:'γ<sub>r</sub>', Hc:'H<sub>c</sub>', gc:'γ<sub>c</sub>', ge:'γ<sub>e</sub>', cap:'상부 증설 중량',
+  L:'L', e:'e', sp:'세굴 방지 사석', E:'굴착 진행', plug:'개량층 두께', hp:'h<sub>p</sub>', hin:'내부 수위', dd:'바깥 수위 저하'};
+const HIDE_OF = {slope:{c:'c',phi:'phi',m:'m'}, piping:{gs:'gs'}, wall:{phi:'phi',mu:'mu',hw:'hw'}, liq:{N:'N',wt:'wt',mul:'N',add:'N'}, found:{phi:'phi',c:'c',dw:'dw'}, pile:{beta:'beta',coat:'beta'}, exc:{cu:'cu',gam:'gam'}, tunnel:{cu:'cu',Nk:'Nk'}, consol:{cv:'cv'},
+  scour:{V:'V',y1:'y1',ysv:'V'}, rock:{zw:'zw',c:'c',phi:'phi'}, quay:{phi:'phi',dh:'dh'}, mono:{phi:'phi',gs:'gs',huv:'huv',H:'H'}, shaft:{hp:'hp',gam:'gam'}};
 const FORMULA = {
   slope: s => [`FS = [c′ + (γ·z·cos²β − u + q·cos²β)·tanφ′] ÷ [(γ·z + q)·sinβ·cosβ]`, `u = m·γ<sub>w</sub>·z·cos²β`, `γ = ${s.gamma} kN/m³, γ<sub>w</sub> = 9.81 kN/m³, q = ${s.q||0} kPa`],
   piping: s => [`FS = (γ′·D + q) ÷ (γ<sub>w</sub>·Δh<sub>e</sub> / 2)`, `Δh<sub>e</sub> = Δh ${s.grout ? '× 0.8 (차수 커튼 시공됨)' : '(차수 커튼 시공 시 × 0.8)'}`, `γ<sub>w</sub> = 9.81 kN/m³`],
@@ -1826,7 +2095,12 @@ const FORMULA = {
   found: s => [`FS = q<sub>u</sub> ÷ (Q/B)`, `q<sub>u</sub> = c′N<sub>c</sub> + γD<sub>f</sub>N<sub>q</sub> + ½γ<sub>e</sub>BN<sub>γ</sub> (γ = ${s.gam})`, `N<sub>q</sub> = e<sup>π·tanφ′</sup>·tan²(45° + φ′/2), N<sub>c</sub> = (N<sub>q</sub> − 1)·cotφ′, N<sub>γ</sub> = 2(N<sub>q</sub> + 1)·tanφ′`, `γ<sub>e</sub> = γ′ + (d<sub>w</sub>/B)(γ − γ′) (d<sub>w</sub> < B일 때), γ′ = γ − 9.81`],
   pile: s => [`FS = Q<sub>ult</sub> ÷ (P + Q<sub>n</sub>)`, `Q<sub>ult</sub> = q<sub>b</sub>·πD²/4 + f<sub>s</sub>·πD·L<sub>s</sub> (q<sub>b</sub> = ${s.qb} kPa, f<sub>s</sub> = ${s.fsand} kPa)`, `Q<sub>n</sub> = β·σ′<sub>avg</sub>·πD·L<sub>c</sub> × 코팅 계수, σ′<sub>avg</sub> = 성토하중 + γ′·L<sub>c</sub>/2`, `γ′ = 7.19 kN/m³, L<sub>c</sub> = ${s.Lc} m, P = 말뚝당 하중 × 분담률`],
   exc: s => [`FS = c<sub>u</sub>·N<sub>c</sub>·(1 + 0.15·d) ÷ (γ·H<sub>e</sub> + q)`, `N<sub>c</sub> = 5.14·(1 + 0.2·min(H<sub>e</sub>/B, 1)), H<sub>e</sub> = H − 소단 효과, B = ${s.B} m`, `승리 조건: 굴착 완료(H = ${s.Hf} m) 시점에 FS ≥ 1.5`],
-  tunnel: s => [`FS = N<sub>k</sub> ÷ N`, `N = (σ<sub>v</sub> − σ<sub>T</sub>) ÷ c<sub>u</sub>`, `σ<sub>v</sub> = γ(C + D/2), γ = ${s.gam} kN/m³, D = ${s.Dt} m`, `막장압이 0.8σ<sub>v</sub>를 넘으면 분출(blow-out)`]};
+  tunnel: s => [`FS = N<sub>k</sub> ÷ N`, `N = (σ<sub>v</sub> − σ<sub>T</sub>) ÷ c<sub>u</sub>`, `σ<sub>v</sub> = γ(C + D/2), γ = ${s.gam} kN/m³, D = ${s.Dt} m`, `막장압이 0.8σ<sub>v</sub>를 넘으면 분출(blow-out)`],
+  scour: s => [`세굴 여유율 = D<sub>f</sub> ÷ y<sub>s</sub>`, `y<sub>s</sub> = 2.0·K₁·K₂·K₃·a·(y₁/a)<sup>0.35</sup>·Fr<sup>0.43</sup> × 보호공 감소계수`, `Fr = V ÷ √(g·y₁), K₂ = 1 (흐름과 나란한 교각), K₃ = 1.1 (사구 하상), a = ${s.a} m`],
+  rock: s => [`FS = [c·A + (W·cosψ<sub>p</sub> − U − V·sinψ<sub>p</sub> + T)·tanφ] ÷ (W·sinψ<sub>p</sub> + V·cosψ<sub>p</sub>)`, `A = (H − z) ÷ sinψ<sub>p</sub>, U = ½γ<sub>w</sub>·z<sub>w</sub>·A, V = ½γ<sub>w</sub>·z<sub>w</sub>²`, `W = ½γ<sub>r</sub>·H²·[(1 − (z/H)²)·cotψ<sub>p</sub> − cotψ<sub>f</sub>], 인장균열 깊이 z = ${s.z} m, γ<sub>r</sub> = ${s.gr} kN/m³`],
+  quay: s => [`FS = M<sub>r</sub> ÷ M<sub>o</sub> (앞굽 기준)`, `M<sub>r</sub> = W′·B/2, W′ = B·(γ<sub>c</sub>·H<sub>c</sub> − γ<sub>w</sub>·h) + 상부 증설 중량, h = ${s.h} m`, `M<sub>o</sub> = ½K<sub>a</sub>·γ<sub>e</sub>·H<sub>c</sub>²·(H<sub>c</sub>/3) + K<sub>a</sub>·q·H<sub>c</sub>·(H<sub>c</sub>/2) + γ<sub>w</sub>·Δh·h·(h/2)`, `K<sub>a</sub> = (1 − sinφ′) ÷ (1 + sinφ′), γ<sub>e</sub> = ${s.ge} kN/m³ (물속 포함 평균)`],
+  mono: s => [`FS = H<sub>u</sub> ÷ H`, `H<sub>u</sub> = 0.5·γ′·D·L³·K<sub>p</sub> ÷ (e + L) (Broms: 사질토, 머리 자유, 짧은 말뚝)`, `K<sub>p</sub> = (1 + sinφ′) ÷ (1 − sinφ′)`],
+  shaft: s => [`FS = (γ<sub>t</sub>·D + γ<sub>w</sub>·h<sub>내부</sub>) ÷ (γ<sub>w</sub>·h<sub>p</sub>)`, `D = ${s.D0} m − 굴착 진행 + 개량층 두께, h<sub>p</sub> = 모래층 윗면 기준 피압수두`, `예상 침하 = C<sub>c</sub>·H/(1 + e₀)·log₁₀[(σ′₀ + γ<sub>w</sub>·Δh<sub>바깥</sub>)/σ′₀], C<sub>c</sub> = 0.3, H = 4 m, e₀ = 1.4, σ′₀ = 60 kPa`, `승리 조건: 굴착 완료 시 FS ≥ 1.2, 예상 침하 ≤ 5 cm`]};
 function hiddenKey(k){ const h = (HIDE_OF[BT.id]||{})[k]; return h && !revealed(h); }
 function diffState(a, b){
   const out = [];
@@ -2046,6 +2320,7 @@ function startBattle(id, opts){
 const fmtV = v => BT.B.pct ? Math.round(v*100) + '%' : v.toFixed(2);
 const evAt = k => BT.B.events[(BT.turn + k) % BT.B.events.length];
 function paramVal(p, B, st){
+  if (p.fv) return p.fv(st, B);
   switch(p.k){
     case 'crr': return B.crr(st).toFixed(3); case 'csr': return B.csr(st, 0.22).toFixed(3);
     case 'req': return B.sreq(st).toFixed(2); case 'mo': return `${Math.round(st.t*12)} / ${st.dl}`;
@@ -2068,7 +2343,7 @@ function renderBattleUI(){
   let fc = `다음 예보: <b>${evAt(0).name}</b> · ${evAt(0).fx}`;
   if (foresight()) fc += `<br>그다음: <b>${evAt(1).name}</b> · ${evAt(1).fx}`;
   if (BT.id === 'consol' && revealed('cv') && revealed('req')) fc += `<br>지금 대책대로면 개통일 준비도 <b>${fmtV(B.project(st))}</b>`;
-  if (BT.id === 'tunnel') fc += `<br>지표 침하 <b style="color:${st.set > 6 ? 'var(--hp)' : 'var(--gold)'}">${st.set.toFixed(1)} cm</b> / 한계 6 cm`;
+  if (B.limit){ const L = B.limit; fc += `<br>${L.l} <b style="color:${st[L.k] > L.max ? 'var(--hp)' : 'var(--gold)'}">${st[L.k].toFixed(1)} ${L.u}</b> / 한계 ${L.max} ${L.u}`; }
   if (BT.block) fc += `<br><b style="color:var(--fs)">비상 대응 준비 완료</b>`;
   if ((APPROVE[BT.id] || []).length){ const miss = approvalMissing(); fc += `<br>🧾 설계 승인 조건: <b style="color:${miss.length ? 'var(--hp)' : 'var(--fs)'}">${(APPROVE[BT.id]).map(id => svName(id) + (BT.sv.has(id) ? ' ✓' : '')).join(', ')}</b>${miss.length ? ' (미실시)' : ''}`; }
   $('forecast').innerHTML = fc;
@@ -2083,7 +2358,7 @@ function renderBattleUI(){
       pv += `<span class="pv" style="color:${d > 0.004 ? 'var(--fs)' : d < -0.004 ? 'var(--hp)' : 'var(--dim)'}">${isC ? '개통일 예상 준비도' : '예상 ' + B.label}: ${fmtV(a0)} → ${fmtV(nv)}</span>`;
       if (BT.id === 'consol' && sk.id === 'pre'){ const tot = c.load + c.pre; if (tot > 103) pv += `<span class="pv" style="color:var(--hp)">⚠ 총 성토하중 ${tot} kPa: 지지력 초과!</span>`; }
       if (BT.id === 'tunnel' && sk.id === 'epb' && c.sT > 0.8*B.sv(c)) pv += `<span class="pv" style="color:var(--hp)">⚠ 막장압 ${c.sT} kPa: 분출 위험!</span>`;
-      if (BT.id === 'tunnel' && sk.id === 'dew' && c.set > 6) pv += `<span class="pv" style="color:var(--hp)">⚠ 지표 침하 ${c.set.toFixed(1)} cm: 민원 발생!</span>`; }
+      if (B.limit && c[B.limit.k] > B.limit.max && c[B.limit.k] > st[B.limit.k]) pv += `<span class="pv" style="color:var(--hp)">⚠ ${B.limit.l} ${c[B.limit.k].toFixed(1)} ${B.limit.u}: 민원 발생!</span>`; }
     if (done) pv = `<span class="pv" style="color:var(--dim)">시공 완료</span>`;
     if (lock) pv = `<span class="pv" style="color:var(--gold)">🔒 필요 장비: ${itemName(sk.req)} (상점)</span>`;
     const m = effMul(sk.tag);
@@ -2173,12 +2448,12 @@ async function bossTurn(){
     if (v >= 1 && m2) await say(m2);
     if (v < 1){ BT.fx.shake = 50;
       const txt = {liq:'지반이 액상화됐다! 모래와 물이 분출하고 구조물이 기울었다.', piping:'굴착 바닥에서 물과 모래가 끓어올랐다! 보일링 발생!', wall:'옹벽이 밀려 나갔다! 활동 파괴!', slope:'사면이 무너져 내렸다! 산사태 발생!',
-        found:'기초가 기울며 지반이 옆으로 밀려 나왔다! 지지력 파괴!', pile:'말뚝이 쑥 내려앉았다! 상부 구조에 균열!', exc:'굴착 바닥이 부풀어 오르며 흙막이가 휘었다! 융기 발생!', tunnel:'막장이 무너져 흙이 쏟아졌다! 막장 붕괴!'}[BT.id];
-      await say((m2 ? m2 + '\n' : '') + `💥 ${txt} (붕괴 ${BT.col + 1}/${BT.colMax})`); if (await damage(20 + (B.ch === 2 ? 5 : 0))) return; if (await collapsed(true)) return; }
-    if (BT.id === 'tunnel' && st.set > 6){ await say(`지표 침하 ${st.set.toFixed(1)} cm! 인근 건물에 균열이 가고 민원이 빗발친다.`); if (await damage(15)) return; }
+        found:'기초가 기울며 지반이 옆으로 밀려 나왔다! 지지력 파괴!', pile:'말뚝이 쑥 내려앉았다! 상부 구조에 균열!', exc:'굴착 바닥이 부풀어 오르며 흙막이가 휘었다! 융기 발생!', tunnel:'막장이 무너져 흙이 쏟아졌다! 막장 붕괴!'}[BT.id] || B.failTxt || '구조물이 무너졌다!';
+      await say((m2 ? m2 + '\n' : '') + `💥 ${txt} (붕괴 ${BT.col + 1}/${BT.colMax})`); if (await damage(20 + 5*(B.ch - 1))) return; if (await collapsed(true)) return; }
+    if (B.limit && st[B.limit.k] > B.limit.max){ const L = B.limit; await say(`${L.l} ${st[L.k].toFixed(1)} ${L.u}! ${L.say}`); if (await damage(L.dmg)) return; }
     BT.turn++;
     if (await tryWin(st)) return;
-    if (BT.turn >= BT.maxTurns){ await say(BT.id === 'exc' && st.H < st.Hf ? '공기가 끝났는데 굴착을 마치지 못했다…' : '공사 기간이 끝났다. 목표에 도달하지 못했다…'); return defeat(15); }
+    if (BT.turn >= BT.maxTurns){ await say((B.late && B.late(st)) || '공사 기간이 끝났다. 목표에 도달하지 못했다…'); return defeat(15); }
   }
   hideMsg(); BT.busy = false; renderBattleUI();
 }
@@ -2201,17 +2476,18 @@ async function victory(){
   if (hasPerk('lucky')) gold = Math.round(gold*1.3);
   const sc = calcScore(); if (BT.secret && secretFirst) sc.tot += 1000; P.score += sc.tot; const key = q ? 'q:' + BT.id : BT.id; P.best[key] = Math.max(P.best[key]||0, sc.tot);
   P.gold += gold; const ev = gainXP(xp);
-  const first = !q && !BT.secret && !P.cleared.includes(BT.id); if (first) P.cleared.push(BT.id);
+  const BT_id = BT.id, first = !q && !BT.secret && !P.cleared.includes(BT.id); if (first) P.cleared.push(BT.id);
   if (q){ P.quests++; P.board = P.board.filter(x => x.id !== q.id); while (P.board.length < 3) { const n = genQuest(); if (!n) break; P.board.push(n); } }
   save(); syncRank();
   await modal(`<h2>${q ? '의뢰 완료!' : '현장 해결!'}</h2><p>${B.lesson}</p>
     <div class="reward"><span>EXP +${xp}</span><span>+${gold}만원</span>${ev.map(e => `<span>${e}</span>`).join('')}</div>
     <dl class="score">${sc.parts.map(([a,b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}${sc.mul > 1 ? `<dt>난이도 배율</dt><dd>×${sc.mul}</dd>` : ''}${BT.practice ? '<dt>연습 모드</dt><dd>×¼</dd>' : ''}<dt class="tot">이번 점수</dt><dd class="tot">${sc.tot}</dd></dl>
-    ${first ? `<p style="color:var(--gold)">★ 인장을 얻었다 (${P.cleared.length}/9)</p>` : ''}${secretFirst ? '<p style="color:var(--gold)">✨ 전설의 지질 해머를 얻어 장착했다! (모든 공법 효과 +35%)</p>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>계속</button></div>`);
+    ${first ? `<p style="color:var(--gold)">★ 인장을 얻었다 (${P.cleared.length}/${ORDER.length})</p>` : ''}${secretFirst ? '<p style="color:var(--gold)">✨ 전설의 지질 해머를 얻어 장착했다! (모든 공법 효과 +35%)</p>' : ''}<div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>계속</button></div>`);
   endBattle();
   if (canChangeJob()) await chooseJob();
   if (first && BT === null && P.cleared.length === 5 && P.cleared.every(k => CH1.includes(k))) await chapterEnd(1);
-  if (first && P.cleared.length === 9) await chapterEnd(2);
+  if (first && CH2.includes(BT_id) && CH2.every(k => P.cleared.includes(k))) await chapterEnd(2);
+  if (first && CH3.includes(BT_id) && ORDER.every(k => P.cleared.includes(k))) await chapterEnd(3);
 }
 function endBattle(){ BT = null; cancelAnimationFrame(stageRAF); $('game').appendChild($('msg')); showWorld(); }
 
@@ -2274,7 +2550,12 @@ const SCENES = {
   found: (c,t) => { px(c,0,0,192,60,'#c9d6e3'); for (let i=0;i<5;i++) px(c,8+i*38,28,30,32,'#9aa3ad'); px(c,0,60,192,36,'#a8743a'); px(c,0,60,192,3,'#8f6230'); for (let i=0;i<4;i++) px(c,20+i*44,22,2,38,'#555'); },
   pile: (c,t) => { px(c,0,0,192,48,'#8faac4'); px(c,0,48,192,10,'#7a8a6a'); px(c,0,58,192,22,'#6b6a5a'); px(c,0,80,192,16,'#c9b48a'); px(c,0,30,192,6,'#7d858f'); for (let i=0;i<5;i++) px(c,16+i*40,36,5,52,'#5d6470'); },
   exc: (c,t) => { px(c,0,0,192,96,'#3a4766'); for (let i=0;i<6;i++) px(c,4+i*32,8+(i%2)*10,24,40,'#4b5878'); px(c,0,48,192,48,'#6b5a4a'); px(c,40,48,112,48,'#4a3a2e'); px(c,38,44,4,52,'#9aa3ad'); px(c,150,44,4,52,'#9aa3ad'); for (let i=0;i<3;i++) px(c,42,58+i*12,108,2,'#c96a2b'); },
-  tunnel: (c,t) => { px(c,0,0,192,96,'#16101e'); c.fillStyle='#2a2238'; c.beginPath(); c.ellipse(96,60,96,52,0,Math.PI,0); c.fill(); for (let i=0;i<10;i++) px(c,(i*21+t/3|0)%192,8+(i*7)%20,1,4,'rgba(120,170,230,.5)'); px(c,0,82,192,14,'#3a3048'); for (let i=0;i<8;i++) px(c,i*26,84,14,2,'#7a6a5a'); }
+  tunnel: (c,t) => { px(c,0,0,192,96,'#16101e'); c.fillStyle='#2a2238'; c.beginPath(); c.ellipse(96,60,96,52,0,Math.PI,0); c.fill(); for (let i=0;i<10;i++) px(c,(i*21+t/3|0)%192,8+(i*7)%20,1,4,'rgba(120,170,230,.5)'); px(c,0,82,192,14,'#3a3048'); for (let i=0;i<8;i++) px(c,i*26,84,14,2,'#7a6a5a'); },
+  scour: (c,t) => { px(c,0,0,192,50,'#9cc0d8'); px(c,0,30,192,20,'#b9d3e3'); px(c,0,50,192,46,'#5a7f8a'); for (let i=0;i<8;i++) px(c,(i*29 + t/3|0)%192,56+(i%3)*10,10,1,'#8fb3cc'); px(c,0,20,192,6,'#7d858f'); for (let i=0;i<6;i++) px(c,10+i*34,26,6,40,'#9aa3ad'); },
+  rock: (c,t) => { px(c,0,0,192,56,'#86b7e0'); px(c,0,56,192,40,'#2f6fb5'); for (let i=0;i<6;i++) px(c,(i*41 + t/4|0)%192,60+(i%2)*6,8,1,'#8cc0ef'); c.fillStyle='#6f675c'; c.beginPath(); c.moveTo(110,96); c.lineTo(130,20); c.lineTo(192,14); c.lineTo(192,96); c.fill(); px(c,150,10,30,6,'#5f9a43'); },
+  quay: (c,t) => { px(c,0,0,192,50,'#f0c39a'); px(c,0,50,192,46,'#2f6fb5'); for (let i=0;i<4;i++) px(c,20+i*44,22,26,28,['#c0392b','#2c6fbf','#3a8a5a','#f2c14e'][i]); px(c,120,4,4,46,'#c9a227'); px(c,96,4,60,4,'#c9a227'); px(c,0,46,192,6,'#9aa0a8'); },
+  mono: (c,t) => { px(c,0,0,192,52,'#5d7a96'); px(c,0,52,192,44,'#2a5a8a'); for (let i=0;i<8;i++) px(c,(i*31 + t/2|0)%192,56+(i%3)*9,12,1,'#8cc0ef'); for (let i=0;i<4;i++){ px(c,20+i*48,14,3,40,'#e9eef7'); const a = t/12 + i; px(c,21+i*48 + Math.cos(a)*8,14 + Math.sin(a)*8,2,2,'#e9eef7'); } },
+  shaft: (c,t) => { px(c,0,0,192,96,'#0e1a2e'); for (let i=0;i<12;i++) px(c,(i*37)%192,(i*23 + t/5|0)%96,2,2,'rgba(140,200,255,.5)'); px(c,70,0,52,96,'#16263e'); px(c,66,0,4,96,'#9aa0a8'); px(c,122,0,4,96,'#9aa0a8'); px(c,0,82,192,14,'#3a5a7a'); }
 };
 function stageLoop(){
   const cv = $('cvStage'), c = cv.getContext('2d');
@@ -2430,6 +2711,72 @@ function drawField(){
     c.strokeStyle = 'rgba(255,255,255,.4)'; c.beginPath(); c.moveTo(cx, gy); c.lineTo(cx, cy - rad); c.stroke(); T(`C = ${st.C} m`, cx + 6, (gy + cy - rad)/2, DIM);
     T(`지표 침하 ${st.set.toFixed(1)} cm`, 8, 14, st.set > 6 ? RED : LINE); T(`막장압 ${st.sT} kPa`, cx + rad + 8, cy + rad + 16, '#3CCF91');
     for (let i=0;i<4;i++) px(c, w*0.7 + i*16, gy - 22 + trough*Math.exp(-((w*0.7 + i*16 - cx)**2)/(2*(w*0.16)**2)), 12, 20, st.set > 6 ? '#a0505a' : '#5d6470'); break; }
+  case 'scour': {
+    BT.hero = [0.08, 0.3];
+    const wl = h*0.3, bed0 = h*0.62, ysm = B.ys(st), sc = Math.min((bed0 - wl)/st.y1, (h - bed0 - 8)/Math.max(st.Df, ysm)), cx = w*0.52, aw = Math.max(10, st.a*sc*1.2), ys = ysm*sc, Df = st.Df*sc;
+    c.fillStyle = WATER; c.fillRect(0, wl, w, bed0 - wl + ys); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(0, wl); c.lineTo(w, wl); c.stroke(); T('▽ 수면', 8, wl - 4, BLUE);
+    c.fillStyle = SAND; c.beginPath(); c.moveTo(0, bed0); c.lineTo(cx - aw/2 - ys*1.8, bed0); c.lineTo(cx - aw/2, bed0 + ys); c.lineTo(cx + aw/2, bed0 + ys); c.lineTo(cx + aw/2 + ys*1.8, bed0); c.lineTo(w, bed0); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.35)'; c.setLineDash([4,3]); c.lineWidth = 1; c.beginPath(); c.moveTo(cx - aw/2 - ys*1.8, bed0); c.lineTo(cx + aw/2 + ys*1.8, bed0); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#b8c0c8'; c.fillRect(cx - aw/2, h*0.06, aw, bed0 + Df - h*0.06); c.fillRect(cx - aw, bed0 + Df - 6, aw*2, 6);
+    if (st.K1 < 1){ c.fillStyle = '#b8c0c8'; c.beginPath(); c.moveTo(cx - aw/2, wl - 10); c.lineTo(cx - aw, (wl + bed0)/2); c.lineTo(cx - aw/2, bed0); c.fill(); }
+    if (st.prot < 0.99){ c.fillStyle = '#7d858f'; for (let i=0;i<6;i++){ c.fillRect(cx - aw/2 - 10 - i*9, bed0 + ys*(1 - i/6) - 5, 8, 5); c.fillRect(cx + aw/2 + 2 + i*9, bed0 + ys*(1 - i/6) - 5, 8, 5); } }
+    if (bed0 + ys > bed0 + Df - 6){ c.strokeStyle = RED; c.lineWidth = 2; c.strokeRect(cx - aw, bed0 + Df - 6, aw*2, 6); }
+    const va = clamp(st.V/2.5, 0.4, 2); for (let i=0;i<3;i++) arrow(10, wl + (bed0 - wl)*(0.25 + 0.25*i), 10 + 26*va, wl + (bed0 - wl)*(0.25 + 0.25*i), LINE, 2);
+    T(`Df = ${st.Df.toFixed(1)} m`, cx + aw + 6, bed0 + Df/2 + 4); T(`a = ${st.a} m`, cx - aw/2, h*0.06 - 4, DIM); T('세굴공', cx + aw/2 + ys*0.8, bed0 + ys + 14, RED); break; }
+  case 'rock': {
+    BT.hero = [0.06, 0.82];
+    const gy = h*0.86, top = h*0.12, sc = (gy - top)/st.H, x0 = w*0.2, pf = st.pf*RAD, pp = st.pp*RAD;
+    const crestX = x0 + st.H/Math.tan(pf)*sc, ty = gy - st.H*sc, kx = x0 + (st.H - st.z)/Math.tan(pp)*sc, ky = gy - (st.H - st.z)*sc;
+    c.fillStyle = WATER; c.fillRect(0, gy - 10, x0, h - gy + 10);
+    c.fillStyle = '#6f675c'; c.beginPath(); c.moveTo(x0, gy); c.lineTo(crestX, ty); c.lineTo(w, ty); c.lineTo(w, h); c.lineTo(0, h); c.lineTo(0, gy); c.fill();
+    c.fillStyle = 'rgba(255,139,139,.22)'; c.beginPath(); c.moveTo(x0, gy); c.lineTo(crestX, ty); c.lineTo(kx, ty); c.lineTo(kx, ky); c.closePath(); c.fill();
+    c.strokeStyle = RED; c.lineWidth = 2; c.setLineDash([5,3]); c.beginPath(); c.moveTo(x0, gy); c.lineTo(kx, ky); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#0a0f22'; c.fillRect(kx - 2, ty, 4, ky - ty);
+    if (st.zw > 0){ c.fillStyle = BLUE; c.fillRect(kx - 2, ky - st.zw*sc, 4, st.zw*sc); for (let i=0;i<3;i++) arrow(kx - 4, ky - st.zw*sc*(0.2 + 0.3*i), kx - 12 - st.zw*2, ky - st.zw*sc*(0.2 + 0.3*i), BLUE, 1.5); }
+    if (st.T > 0){ c.strokeStyle = '#f2c14e'; c.lineWidth = 2; const n = Math.min(5, Math.ceil(st.T/200)); for (let i=0;i<n;i++){ const f = 0.2 + 0.6*i/Math.max(1, n - 1), jx = x0 + (kx - x0)*f, jy = gy + (ky - gy)*f; c.beginPath(); c.moveTo(jx - Math.sin(pp)*22, jy - Math.cos(pp)*22); c.lineTo(jx + Math.sin(pp)*18, jy + Math.cos(pp)*18); c.stroke(); } }
+    if (st.drain){ c.strokeStyle = BLUE; c.lineWidth = 2; c.beginPath(); c.moveTo(x0 + 6, gy - 6); c.lineTo(kx, ky - 2); c.stroke(); }
+    if (st.cover){ c.strokeStyle = '#c9ced6'; c.lineWidth = 3; c.beginPath(); c.moveTo(x0, gy); c.lineTo(crestX, ty); c.stroke(); }
+    T(`ψf = ${st.pf}°`, x0 + 8, gy - 8, DIM); T(`ψp = ${st.pp}°`, (x0 + kx)/2 + 10, (gy + ky)/2 + 16, RED); T(`H = ${st.H} m`, w - 8, (ty + gy)/2, DIM, 'right'); T('인장균열', kx + 6, ty + 14, LINE); break; }
+  case 'quay': {
+    BT.hero = [0.06, 0.5];
+    const gy = h*0.9, top = h*0.1, sc = (gy - top)/(st.Hc + 1.5), cx = w*0.4, Bw = st.B*sc*0.7, cy = gy - st.Hc*sc, sl = gy - st.h*sc, rl = gy - (st.h + st.dh)*sc;
+    c.fillStyle = WATER; c.fillRect(0, sl, cx - Bw/2, gy - sl); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(0, sl); c.lineTo(cx - Bw/2, sl); c.stroke(); T('▽ 바다 (간조)', 6, sl - 4, BLUE);
+    c.fillStyle = st.phi >= 40 ? '#8a8478' : SOIL; c.fillRect(cx + Bw/2, cy, w - cx - Bw/2, gy - cy);
+    c.fillStyle = WATER; c.fillRect(cx + Bw/2, rl, w - cx - Bw/2, gy - rl); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(cx + Bw/2, rl); c.lineTo(w, rl); c.stroke(); T('▽ 배면 잔류수위', cx + Bw/2 + 6, rl + 14, BLUE);
+    c.fillStyle = '#5d6470'; c.fillRect(0, gy, w, h - gy);
+    c.fillStyle = st.gc > 20 ? '#9aa0a8' : '#b8c0c8'; c.fillRect(cx - Bw/2, cy, Bw, gy - cy); c.strokeStyle = '#0a0f22'; c.lineWidth = 1; for (let i=1;i<3;i++){ c.beginPath(); c.moveTo(cx - Bw/2 + Bw*i/3, cy + 6); c.lineTo(cx - Bw/2 + Bw*i/3, gy); c.stroke(); }
+    if (st.cap > 0){ const ch = Math.min(18, st.cap/40); c.fillStyle = '#d9dee4'; c.fillRect(cx - Bw/2, cy - ch, Bw, ch); }
+    if (st.drain){ c.fillStyle = BLUE; c.fillRect(cx + Bw/2 - 4, gy - 14, 8, 8); }
+    for (let i=0;i<Math.round(st.q/10);i++) arrow(cx + Bw/2 + 18 + i*22, cy - 14, cx + Bw/2 + 18 + i*22, cy - 1, RED, 2);
+    for (let i=0;i<3;i++) arrow(cx + Bw/2 + 26, rl + (gy - rl)*(0.25 + 0.25*i), cx + Bw/2 + 4, rl + (gy - rl)*(0.25 + 0.25*i), BLUE, 1.5);
+    c.strokeStyle = 'rgba(255,139,139,.8)'; c.lineWidth = 2; c.beginPath(); c.arc(cx - Bw/2, gy, 18, -Math.PI/2, -Math.PI*0.95, true); c.stroke(); T('전도', cx - Bw/2 - 40, gy - 22, RED);
+    T(`B = ${st.B.toFixed(1)} m`, cx, gy + 14, LINE, 'center'); break; }
+  case 'mono': {
+    BT.hero = [0.06, 0.1];
+    const top = h*0.05, sc = (h - top - 6)/(st.e + 6 + st.L), gy = top + (st.e + 6)*sc, sl = top + 6*sc, cx = w*0.45, pw = Math.max(8, st.D*sc*0.9), ly = gy - st.e*sc;
+    c.fillStyle = WATER; c.fillRect(0, sl, w, gy - sl); c.strokeStyle = BLUE; c.beginPath(); c.moveTo(0, sl); c.lineTo(w, sl); c.stroke(); T('▽ 해수면', cx + pw/2 + 6, sl - 4, BLUE);
+    c.fillStyle = SAND; c.fillRect(0, gy, w, h - gy); if (st.phi > 35){ c.fillStyle = 'rgba(230,220,180,.35)'; c.fillRect(cx - pw*3, gy, pw*6, st.L*sc); }
+    if (st.sp){ c.fillStyle = '#7d858f'; for (let i=0;i<8;i++) c.fillRect(cx - pw*2.2 + i*pw*0.6, gy - 5, pw*0.5, 5); }
+    c.fillStyle = '#c9ced6'; c.fillRect(cx - pw/2, top - 4, pw, gy + st.L*sc - top + 4); c.fillStyle = '#f2c14e'; c.fillRect(cx - pw/2, sl - 8, pw, 6);
+    if (st.e < 30){ c.strokeStyle = '#9aa0a8'; c.lineWidth = 1.5; for (let i=0;i<3;i++){ const y = ly + (gy - ly)*i/3; c.beginPath(); c.moveTo(cx - pw*1.6, y); c.lineTo(cx + pw*1.6, y + (gy - ly)/3); c.moveTo(cx + pw*1.6, y); c.lineTo(cx - pw*1.6, y + (gy - ly)/3); c.stroke(); } }
+    const hl = clamp(st.H/8000, 0.5, 2); arrow(cx - pw/2 - 50*hl, ly, cx - pw/2 - 2, ly, RED, 3); T(`H`, cx - pw/2 - 50*hl, ly - 6, RED);
+    for (let i=0;i<4;i++){ const y = gy + st.L*sc*(0.15 + 0.22*i); arrow(cx + pw/2 + 30, y, cx + pw/2 + 4, y, '#3CCF91', 1.5); }
+    c.strokeStyle = 'rgba(255,255,255,.4)'; c.setLineDash([3,3]); c.beginPath(); c.moveTo(cx + pw/2 + 40, gy); c.lineTo(cx + pw/2 + 40, ly); c.stroke(); c.setLineDash([]);
+    T(`e = ${st.e} m`, cx + pw/2 + 46, (gy + ly)/2, DIM); T(`L = ${st.L.toFixed(1)} m`, cx + pw/2 + 46, gy + st.L*sc/2, LINE); T(`D = ${st.D} m`, cx - pw/2 - 8, gy + 16, LINE, 'right'); break; }
+  case 'shaft': {
+    BT.hero = [0.06, 0.08];
+    const gy = h*0.1, depth = 20 + st.E, D = st.D0 - st.E + st.plug, sandTop = 20 + st.D0 + st.plug, sc = (h - gy - 4)/(sandTop + 4), cx = w*0.42, sw = w*0.16;
+    const trough = st.set*2.4, sy = x => gy + trough*Math.exp(-((x - cx)**2)/(2*(w*0.22)**2));
+    c.fillStyle = CLAY; c.beginPath(); c.moveTo(0, gy); for (let x=0;x<=w;x+=6) c.lineTo(x, sy(x)); c.lineTo(w, h); c.lineTo(0, h); c.fill();
+    c.fillStyle = 'rgba(74,163,255,.28)'; c.fillRect(0, gy + sandTop*sc, w, h); c.fillStyle = SAND; c.globalAlpha = 0.55; c.fillRect(0, gy + sandTop*sc, w, h); c.globalAlpha = 1; T('피압 모래층', 8, gy + sandTop*sc + 16, LINE);
+    if (st.plug > 0){ c.fillStyle = 'rgba(200,200,200,.55)'; c.fillRect(cx - sw/2, gy + (sandTop - st.plug)*sc, sw, st.plug*sc); }
+    const wt = gy + 2*sc, dd = st.dd*3*sc; c.strokeStyle = BLUE; c.lineWidth = 2; c.setLineDash([5,3]); c.beginPath(); c.moveTo(0, wt); for (let x=0;x<=w;x+=6) c.lineTo(x, wt + dd*Math.exp(-((x - cx)**2)/(2*(w*0.2)**2))); c.stroke(); c.setLineDash([]); T('▽ 지하수위', cx + sw/2 + 10, wt - 4, BLUE);
+    c.fillStyle = '#0a0f22'; c.fillRect(cx - sw/2, gy, sw, depth*sc);
+    if (st.hin > 0){ c.fillStyle = WATER; c.fillRect(cx - sw/2, gy + (depth - st.hin)*sc, sw, st.hin*sc); }
+    const cut = st.hp <= 17.5 ? sandTop + 3 : depth + 6; c.fillStyle = '#9aa0a8'; c.fillRect(cx - sw/2 - 5, gy, 5, cut*sc); c.fillRect(cx + sw/2, gy, 5, cut*sc);
+    const up = clamp(st.hp/20, 0.3, 1.6); for (let i=0;i<3;i++){ const x = cx - sw/3 + i*sw/3; arrow(x, gy + sandTop*sc + 4, x, gy + sandTop*sc - 14*up, BLUE, 2); }
+    T(`D = ${D.toFixed(1)} m`, cx + sw/2 + 10, gy + (depth + D/2)*sc + 4, LINE); T(`예상 침하 ${st.set.toFixed(1)} cm`, cx + sw/2 + 10, 14, st.set > 5 ? RED : LINE);
+    for (let i=0;i<3;i++){ const x = w*0.84 + i*18; px(c, x, sy(x) - 18, 14, 18, st.set > 5 ? '#a0505a' : '#5d6470'); } break; }
   }
 }
 window.addEventListener('resize', () => { if (BT) drawField(); });
@@ -2442,7 +2789,7 @@ function genQuest(){
     const type = pick(types), B = BOSSES[type], over = B.rand(), st = Object.assign(B.init(), over);
     let ok;
     if (type === 'consol') ok = true;
-    else if (type === 'exc'){ const c = structuredClone(st); c.H = c.Hf; const v = B.fs(c); ok = v > 0.75 && v < 1.3; }
+    else if (B.finish){ const c = structuredClone(st); B.finish(c); const v = B.fs(c); ok = v > 0.5*B.target && v < 0.87*B.target; }
     else { const v = B.fs(st); ok = v > 0.8 && v < B.target*0.85; }
     if (!ok) continue;
     const stars = pick([1,2,2,3]);
@@ -2480,7 +2827,7 @@ function menuStatus(){
       ${ex ? `<button class="btn sm gold" id="mExam">${ex.name} 응시 (100만원)</button>` : ''}</div>
     <div class="card"><div class="cn">${P.name}</div>
       <dl class="score"><dt>레벨</dt><dd>${P.lv}${P.lv < MAXLV ? ` (다음까지 ${XPNEED[P.lv] - P.xp} XP)` : ' (MAX)'}</dd><dt>최대 HP / 예산</dt><dd>${maxHp()} / ${maxBud()}</dd>
-      <dt>누적 점수</dt><dd>${Math.round(P.score)}</dd><dt>인장</dt><dd>${P.cleared.length}/9</dd><dt>완료 의뢰</dt><dd>${P.quests}</dd>
+      <dt>누적 점수</dt><dd>${Math.round(P.score)}</dd><dt>인장</dt><dd>${P.cleared.length}/${ORDER.length}</dd><dt>완료 의뢰</dt><dd>${P.quests}</dd>
       <dt>시험 마스터</dt><dd>${labDone('lab') ? '🔬 실내 ✓' : '🔬 실내 ' + TESTS.filter(t => t.kind==='lab' && P.tests[t.id]).length + '/7'} · ${labDone('field') ? '🚜 현장 ✓' : '🚜 현장 ' + TESTS.filter(t => t.kind==='field' && P.tests[t.id]).length + '/6'}</dd><dt>저장 코드</dt><dd style="font-family:monospace;color:var(--gold)">${CL.ready ? (P.code || CL.uid) : '-'}</dd><dt>난이도 · 패배</dt><dd>${DF().n} · ${P.fails||0}회</dd><dt>퀴즈 정답률</dt><dd>${P.qs.t ? Math.round(P.qs.r/P.qs.t*100) : 0}% (${P.qs.r}/${P.qs.t})</dd></dl>
       <div class="row" style="justify-content:flex-start"><label class="note" for="mCls">반 코드</label><input class="inp" id="mCls" maxlength="16" value="${(P.cls||'').replace(/"/g,'&quot;')}"><button class="btn sm" id="mClsSave">저장</button></div></div></div>`;
 }
@@ -2529,7 +2876,7 @@ function bindMenu(){
 }
 async function loadRank(){
   const box = $('mbody'); if (!box) return;
-  if (!CL.ready){ box.innerHTML = `<p>반 랭킹 서버가 연결되지 않았어요. (교수님: 구글 스프레드시트 Apps Script 웹 앱으로 열거나, 파일의 RANK_URL을 설정하세요.)</p><dl class="score"><dt>누적 점수</dt><dd>${Math.round(P.score)}</dd><dt>레벨</dt><dd>${P.lv}</dd><dt>인장</dt><dd>${P.cleared.length}/9</dd></dl>`; return; }
+  if (!CL.ready){ box.innerHTML = `<p>반 랭킹 서버가 연결되지 않았어요. (교수님: 구글 스프레드시트 Apps Script 웹 앱으로 열거나, 파일의 RANK_URL을 설정하세요.)</p><dl class="score"><dt>누적 점수</dt><dd>${Math.round(P.score)}</dd><dt>레벨</dt><dd>${P.lv}</dd><dt>인장</dt><dd>${P.cleared.length}/${ORDER.length}</dd></dl>`; return; }
   box.innerHTML = '<p class="note">랭킹을 불러오는 중…</p>';
   await syncRank();
   let rows = [];
@@ -2567,7 +2914,8 @@ function refreshTitle(){ const s = bestSave(); $('btnCont').disabled = !s; $('cl
   if (s){ $('inName').value = s.name; $('inCls').value = s.cls || ''; } }
 async function chapterEnd(n){
   if (n === 1) await modal(`<h2>1장 클리어!</h2><p>${P.name}은(는) 들판의 다섯 시련을 모두 이겨 냈다. 흙은 물과 함께 움직이고, 안전율은 유효응력에서 나온다.</p><p>이제 동쪽 항구에서 도시행 배를 탈 수 있다. 2장 “도시의 지하”에는 기초, 말뚝, 흙막이, 터널의 괴물이 기다린다. 메뉴의 “현장 의뢰”로 실력을 더 쌓을 수도 있다.</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>항구로!</button></div>`);
-  else await modal(`<h2>지반 용사 탄생</h2><p>${P.name}은(는) 들판과 도시의 아홉 시련을 모두 이겨 냈다.</p><p>조사 없는 설계는 없고, 시간과 물은 언제나 흙의 편이며, 안정성과 침하는 함께 관리해야 한다. 이것이 아홉 인장에 새겨진 교훈이다.</p><div class="reward"><span>${jobTitle()}</span><span>LV ${P.lv}</span><span>점수 ${Math.round(P.score)}</span></div><p class="note">현장 의뢰는 계속 들어온다. 반 랭킹 1위에 도전해 보자!</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>계속 모험하기</button></div>`);
+  else if (n === 2) await modal(`<h2>2장 클리어!</h2><p>${P.name}은(는) 도시 지하의 네 시련을 모두 이겨 냈다. 기초와 말뚝, 흙막이와 터널은 결국 흙과 물의 힘겨루기였다.</p><p>이제 도시 동쪽 끝 항구에서 부산행 배를 탈 수 있다. 3장 “부산 항만”에는 세굴, 암반 절벽, 안벽, 해상풍력, 해저터널의 괴물이 기다린다.</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>항구로!</button></div>`);
+  else await modal(`<h2>지반 용사 탄생</h2><p>${P.name}은(는) 들판과 도시, 그리고 바다의 열네 시련을 모두 이겨 냈다.</p><p>조사 없는 설계는 없고, 시간과 물은 언제나 흙의 편이며, 안정성과 침하는 함께 관리해야 한다. 이것이 열네 인장에 새겨진 교훈이다.</p><div class="reward"><span>${jobTitle()}</span><span>LV ${P.lv}</span><span>점수 ${Math.round(P.score)}</span></div><p class="note">현장 의뢰는 계속 들어온다. 반 랭킹 1위에 도전해 보자!</p><div class="row" style="justify-content:flex-end"><button class="btn gold" data-close>계속 모험하기</button></div>`);
 }
 $('btnNew').onclick = async () => {
   if (bestSave()){ const k = await ask('저장된 진행 상황이 사라진다. 새로 시작할까?', ['새로 시작','취소']); hideMsg(); if (k !== 0) return; }

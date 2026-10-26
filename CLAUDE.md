@@ -15,6 +15,13 @@
 4. 커밋하고 `main`에 푸시 → GitHub Pages가 1~2분 뒤 자동 반영
    - 게임 주소: https://youngmankwon.github.io/geo-rpg/ (영어: /en/)
 
+## 게임 구성
+- 1장 들판(보스 5) · 2장 도시(4) · 3장 부산 항만(5). 보스 순서는 `ORDER`, 장 구분은 `CH1`/`CH2`/`CH3`.
+- 지도는 `MAPS` (24×15). 보스 현장 타일은 `SITE_CH` 순서(`1`~`9`, `A`~`E`)로 `ORDER`와 짝지어진다.
+- 보스를 추가하려면 `BOSSES`, `SURVEYS`, `NEEDS`, `TRAPS`, `SV_TEST`, `HIDE_OF`, `FORMULA`, `SYM`, `drawField`의 case, `SCENES`, `bossSprite0`에 같은 id로 넣는다.
+- 보스 선택 기능: `won`·`finish`·`hp`·`late`(공기가 끝나야 끝나는 전투), `limit`(침하 같은 두 번째 한계), `failTxt`(붕괴 문구), param의 `fv`(계산해서 보여 주는 값).
+- 시험 센터: `kind`가 `lab`(실내), `field`(현장), `sea`(해양조사, 3장).
+
 ## 지켜야 할 것
 - 반 랭킹: `RANK_URL`(구글 Apps Script 웹 앱 주소)은 바꾸지 않는다. 점수는 구글 스프레드시트 "랭킹" 시트에 저장된다.
 - 저장 데이터(localStorage `geo-rpg-save`)와 호환을 유지한다. 새 필드는 `normalize()`에서 기본값을 채운다.
