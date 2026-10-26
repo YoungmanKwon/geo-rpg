@@ -261,7 +261,8 @@ table.rank tr.me td{color:var(--gold);font-weight:700}
 .pphead{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px}.pphead b{font-size:15px}
 .skill.pp .tag{background:rgba(229,72,77,.18);color:#ff9b9b;border-color:#e5484d}
 button:focus-visible,summary:focus-visible,.inp:focus-visible{outline:3px solid #f2c14e!important;outline-offset:2px}
-.btn[data-key]{position:relative}.btn[data-key]::after,.skill[data-key]::before{content:attr(data-key);position:absolute;font:600 11px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;padding:0 5px;line-height:16px}
+.btn[data-key]{position:relative}.btn[data-key][data-nk]::after{content:none}.btn[data-nk]::before{content:attr(data-key);display:inline-block;margin-right:6px;font:600 11px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;padding:0 5px;line-height:16px;vertical-align:1px}.card{position:relative}.card[data-key]::before{content:attr(data-key);position:absolute;left:-6px;top:-7px;z-index:1;font:600 11px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;padding:0 5px;line-height:16px}
+.btn[data-key]::after,.skill[data-key]::before{content:attr(data-key);position:absolute;font:600 11px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;padding:0 5px;line-height:16px}
 .btn[data-key]::after{right:4px;top:3px}.skill{position:relative}.skill[data-key]::before{left:-6px;top:-7px;z-index:1}
 .qopts{counter-reset:qo}.qopts button{counter-increment:qo}.qopts button::before{content:counter(qo);display:inline-block;min-width:18px;margin-right:8px;font:600 12px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;text-align:center}
 #msgOpts{counter-reset:mo}#msgOpts .btn{counter-increment:mo}#msgOpts .btn::before{content:counter(mo) " ";color:#f2c14e;font-weight:700}
@@ -1924,14 +1925,21 @@ document.addEventListener('keyup', e => { if (KEYS[e.key]) held = null; });
 const visBtns = (root, sel) => [...root.querySelectorAll(sel || 'button, input, select, summary')].filter(b => !b.disabled && b.offsetParent !== null);
 function navFocus(root, dir){ const L = visBtns(root); if (!L.length) return; const i = L.indexOf(document.activeElement); L[(i < 0 ? (dir > 0 ? 0 : L.length - 1) : (i + dir + L.length) % L.length)].focus(); }
 function pickNth(list, n){ const b = list[n]; if (b && !b.disabled){ b.focus(); b.click(); return true; } return false; }
+// 모달 안에서 숫자키로 고르는 목록: 위에서부터 처음 보이는 종류 하나 (비활성 버튼도 번호는 차지한다)
+const NUM_SEL = ['.qopts button', '[data-test]', '[data-u]', '[data-j]', '[data-quest]', '[data-perk]', '[data-k]'];
+function numList(root){ for (const sel of NUM_SEL){ const L = [...root.querySelectorAll(sel)].filter(b => b.offsetParent !== null); if (L.length) return L.slice(0, 10); } return []; }
+// 번호 배지 붙이기 (.qopts는 CSS 카운터로 이미 번호가 붙는다)
+function markNums(){ const M = $('modalBody'); M.querySelectorAll('[data-nk]').forEach(b => { b.removeAttribute('data-nk'); b.removeAttribute('data-key'); });
+  if (!modalOpen()) return; numList(M).forEach((b, i) => { const t = b.closest('.card') || b; if (!b.closest('.qopts') && !t.dataset.key){ t.dataset.key = (i + 1) % 10; t.dataset.nk = 1; } }); }
+let markT = 0; new MutationObserver(() => { cancelAnimationFrame(markT); markT = requestAnimationFrame(markNums); }).observe($('modal'), {childList:true, subtree:true, attributes:true, attributeFilter:['class']});
 document.addEventListener('keydown', e => {
   if (e.__consumed || e.ctrlKey || e.metaKey || e.altKey) return;
   const tg = e.target && e.target.tagName, typing = tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT';
-  const digit = /^[1-9]$/.test(e.key) ? +e.key - 1 : -1, arrow = {ArrowUp:-1, ArrowLeft:-1, ArrowDown:1, ArrowRight:1}[e.key];
+  const digit = /^[0-9]$/.test(e.key) ? (+e.key + 9) % 10 : -1, arrow = {ArrowUp:-1, ArrowLeft:-1, ArrowDown:1, ArrowRight:1}[e.key];
   // 1) 모달
   if (modalOpen()){
     const M = $('modalBody');
-    if (digit >= 0 && !typing){ for (const sel of ['.qopts button', '[data-test]', '[data-k]']){ const L = visBtns(M, sel); if (L.length){ if (pickNth(L, digit)) e.preventDefault(); return; } } }
+    if (digit >= 0 && !typing){ const L = numList(M); if (L.length){ if (pickNth(L, digit)) e.preventDefault(); return; } }
     if (arrow && !typing){ e.preventDefault(); navFocus(M, arrow); return; }
     if (e.key === 'Escape'){ const x = M.querySelector('.mhead .x') || M.querySelector('.x') || M.querySelector('[data-close], #tBack, #uBack'); if (x){ e.preventDefault(); x.click(); } return; }
     if (e.key === 'Enter' && !typing && (!document.activeElement || !M.contains(document.activeElement))){ const g = visBtns(M, '.btn.gold')[0] || visBtns(M, 'button')[0]; if (g){ e.preventDefault(); g.focus(); } }
