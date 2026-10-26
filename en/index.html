@@ -246,6 +246,7 @@ table.rank tr.me td{color:var(--gold);font-weight:700}
 @media (min-width:861px){ .bscr .sbars{overflow-y:auto} }
 .langsw{color:var(--gold);font-family:"Do Hyeon",sans-serif;font-size:18px;text-decoration:none;border:2px solid var(--gold);border-radius:999px;padding:4px 14px}
 .langsw:hover{background:rgba(242,193,78,.12)}
+.title .ver{margin-top:10px;font-size:12px;color:var(--dim);letter-spacing:.05em}
 .labsteps{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}.labsteps span{font-family:"Do Hyeon",sans-serif;font-size:16px;padding:3px 12px;border-radius:999px;border:2px solid #34446f;color:var(--dim)}.labsteps span.on{border-color:var(--gold);color:#1d2c57;background:var(--gold)}
 .labq{background:#0f1834;border:2px solid #34446f;border-radius:8px;padding:10px 12px;margin:8px 0}.labq p{margin:0 0 6px}
 .lablog{margin:3px 0;font-size:14px}.lablog.ok{color:var(--fs)}.lablog.no{color:#ff9b9b}
@@ -259,6 +260,11 @@ table.rank tr.me td{color:var(--gold);font-weight:700}
 #tagLayer{position:absolute;left:0;top:0;pointer-events:none;z-index:3}
 .pphead{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px}.pphead b{font-size:15px}
 .skill.pp .tag{background:rgba(229,72,77,.18);color:#ff9b9b;border-color:#e5484d}
+button:focus-visible,summary:focus-visible,.inp:focus-visible{outline:3px solid #f2c14e!important;outline-offset:2px}
+.btn[data-key]{position:relative}.btn[data-key]::after,.skill[data-key]::before{content:attr(data-key);position:absolute;font:600 11px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;padding:0 5px;line-height:16px}
+.btn[data-key]::after{right:4px;top:3px}.skill{position:relative}.skill[data-key]::before{left:-6px;top:-7px;z-index:1}
+.qopts{counter-reset:qo}.qopts button{counter-increment:qo}.qopts button::before{content:counter(qo);display:inline-block;min-width:18px;margin-right:8px;font:600 12px "IBM Plex Sans KR",sans-serif;color:#1d2c57;background:#f2c14e;border-radius:4px;text-align:center}
+#msgOpts{counter-reset:mo}#msgOpts .btn{counter-increment:mo}#msgOpts .btn::before{content:counter(mo) " ";color:#f2c14e;font-weight:700}
 </style>
 </head>
 <body>
@@ -277,11 +283,12 @@ table.rank tr.me td{color:var(--gold);font-weight:700}
     <div class="row" style="margin-top:14px"><input id="inCode" maxlength="16" placeholder="Save code" autocomplete="off" style="width:150px"><button class="btn sm" id="btnCode">Continue with code</button></div>
     <p class="note" id="cloudNote" style="margin-top:10px"></p>
     <div class="row" style="margin-top:12px"><a class="langsw" href="../">🌐 한국어</a></div>
+    <div class="ver" id="gameVer">v2026.10.26</div>
   </section>
 
   <section id="scrWorld" class="hidden">
     <div class="worldWrap"><canvas id="cvWorld" class="pix" width="384" height="240"></canvas><canvas id="tagLayer"></canvas><canvas id="miniMap" aria-label="Minimap"></canvas><div id="goalBox"></div><div class="win maptag" id="mapTag"></div></div>
-    <div class="hint"><b id="hintMap"></b> · Move with arrow keys or WASD, talk with Space. (On phones, tap the screen or use the direction pad) Use “Menu” at the top for gear, skills, site requests and class ranking.</div>
+    <div class="hint"><b id="hintMap"></b> · Arrows/WASD move · Space talk · M menu · Battle: number keys = methods, Q investigate · W quiz · E items · R retreat · Choices: number keys or arrows + Enter (on phones, tap the screen or use the pad). Use “Menu” for gear, skills, site requests and class ranking.</div>
     <div class="dpad" id="dpad"><button class="u" data-d="0,-1" aria-label="Up">▲</button><button class="l" data-d="-1,0" aria-label="Left">◀</button><button class="a" data-a="1">Talk</button><button class="r" data-d="1,0" aria-label="Right">▶</button><button class="d" data-d="0,1" aria-label="Down">▼</button></div>
   </section>
 
@@ -297,17 +304,17 @@ table.rank tr.me td{color:var(--gold);font-weight:700}
           <div class="win forecast" id="forecast"></div>
         </div>
       </div>
-      <div class="win field"><h3>Soil parameters · Design sheet</h3><dl class="params" id="params"></dl><details class="calcbox" id="calc" open></details></div>
+      <div class="win field"><h3>Soil parameters</h3><dl class="params" id="params"></dl></div>
     </div>
     <div class="bgrid">
       <div class="win cmd"><h3>Commands</h3>
         <div class="cmdgrid">
-          <button class="btn" id="cSurvey">Site investigation</button>
-          <button class="btn" id="cQuiz">Engineering quiz</button>
-          <button class="btn" id="cItem">Items</button>
-          <button class="btn" id="cRun">Retreat</button>
+          <button class="btn" id="cSurvey" data-key="Q">Site investigation</button>
+          <button class="btn" id="cQuiz" data-key="W">Engineering quiz</button>
+          <button class="btn" id="cItem" data-key="E">Items</button>
+          <button class="btn" id="cRun" data-key="R">Retreat</button>
         </div>
-        <label class="predtog"><input type="checkbox" id="predTog"> Show FS prediction box before using a method (bonus if correct)</label><div class="insight hidden" id="insight"></div>
+        <div class="insight hidden" id="insight"></div>
         <div class="skills" id="skills"></div><div class="skills hidden" id="cmdPanel"></div>
       </div>
     </div>
@@ -727,11 +734,12 @@ function panelPick(title, items){
   return new Promise(res => {
     const pn = $('cmdPanel'), sk = $('skills'); BT.panel = true; sk.classList.add('hidden'); pn.classList.remove('hidden');
     pn.innerHTML = `<div class="pphead"><b>${title}</b><button class="btn sm" id="ppBack">← Back</button></div>` +
-      (items.length ? items.map((it,i) => `<button class="skill pp" data-k="${i}" ${it.dis ? 'disabled' : ''}><div class="sh"><span class="sn">${it.label}</span>${it.tag ? `<span class="tag">${it.tag}</span>` : ''}${it.cost != null ? `<span class="sc">${it.cost} M$</span>` : ''}</div><div class="sd">${it.desc || ''}</div></button>`).join('')
+      (items.length ? items.map((it,i) => `<button class="skill pp" data-k="${i}" ${i < 9 ? `data-key="${i+1}"` : ''} ${it.dis ? 'disabled' : ''}><div class="sh"><span class="sn">${it.label}</span>${it.tag ? `<span class="tag">${it.tag}</span>` : ''}${it.cost != null ? `<span class="sc">${it.cost} M$</span>` : ''}</div><div class="sd">${it.desc || ''}</div></button>`).join('')
         : `<p class="note" style="grid-column:1/-1">${'No usable items or skills.'}</p>`);
     const done = k => { BT.panel = false; pn.classList.add('hidden'); sk.classList.remove('hidden'); pn.innerHTML = ''; res(k); };
     $('ppBack').onclick = () => done(-1);
     pn.querySelectorAll('[data-k]').forEach(b => b.onclick = () => done(+b.dataset.k));
+    const f0 = pn.querySelector('[data-k]:not(:disabled)') || $('ppBack'); f0.focus();
   });
 }
 const svList = () => SURVEYS[BT.id] || [];
@@ -1828,9 +1836,9 @@ function diffState(a, b){
   return out;
 }
 function renderCalc(){
-  const el = $('calc'); if (!BT){ el.innerHTML = ''; return; }
+  const el = $('calc'); if (!el) return; if (!BT){ el.innerHTML = ''; return; }
   el.innerHTML = `<summary>📐 Design sheet (compute the expected FS yourself!)</summary><div class="formula">${FORMULA[BT.id](BT.st).map(l => `<div>${l}</div>`).join('')}</div>
-   <p class="note">Method cards only show how variables change. Plug them into the formulas above to find the FS. ${P.pred !== false && !BT.B.pct ? 'Predict before using a method — if within ±3%: budget +2 M$, XP +15, score +40.' : ''}</p>`;
+   <p class="note">Method cards only show how variables change. Plug them into the formulas above to find the FS.</p>`;
 }
 async function predictModal(sk){
   const c = structuredClone(BT.st); sk.apply(c, skillMul(sk)); const ch = diffState(BT.st, c);
@@ -1912,6 +1920,49 @@ document.addEventListener('keydown', e => {
   if ((e.key === ' ' || e.key === 'Enter') && !e.__consumed && !e.repeat && performance.now() > msgCool && !W.busy && !W.moving){ e.preventDefault(); const n = facingNPC(); if (n) talkNPC(n); }
 });
 document.addEventListener('keyup', e => { if (KEYS[e.key]) held = null; });
+/* ===== 키보드만으로 전부 조작 ===== */
+const visBtns = (root, sel) => [...root.querySelectorAll(sel || 'button, input, select, summary')].filter(b => !b.disabled && b.offsetParent !== null);
+function navFocus(root, dir){ const L = visBtns(root); if (!L.length) return; const i = L.indexOf(document.activeElement); L[(i < 0 ? (dir > 0 ? 0 : L.length - 1) : (i + dir + L.length) % L.length)].focus(); }
+function pickNth(list, n){ const b = list[n]; if (b && !b.disabled){ b.focus(); b.click(); return true; } return false; }
+document.addEventListener('keydown', e => {
+  if (e.__consumed || e.ctrlKey || e.metaKey || e.altKey) return;
+  const tg = e.target && e.target.tagName, typing = tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT';
+  const digit = /^[1-9]$/.test(e.key) ? +e.key - 1 : -1, arrow = {ArrowUp:-1, ArrowLeft:-1, ArrowDown:1, ArrowRight:1}[e.key];
+  // 1) 모달
+  if (modalOpen()){
+    const M = $('modalBody');
+    if (digit >= 0 && !typing){ for (const sel of ['.qopts button', '[data-test]', '[data-k]']){ const L = visBtns(M, sel); if (L.length){ if (pickNth(L, digit)) e.preventDefault(); return; } } }
+    if (arrow && !typing){ e.preventDefault(); navFocus(M, arrow); return; }
+    if (e.key === 'Escape'){ const x = M.querySelector('.mhead .x') || M.querySelector('.x') || M.querySelector('[data-close], #tBack, #uBack'); if (x){ e.preventDefault(); x.click(); } return; }
+    if (e.key === 'Enter' && !typing && (!document.activeElement || !M.contains(document.activeElement))){ const g = visBtns(M, '.btn.gold')[0] || visBtns(M, 'button')[0]; if (g){ e.preventDefault(); g.focus(); } }
+    return;
+  }
+  // 2) 대화창 선택지
+  const mo = $('msgOpts'); if (!$('msg').classList.contains('hidden') && mo && mo.children.length){
+    const L = visBtns(mo, 'button'); if (digit >= 0){ e.preventDefault(); pickNth(L, digit); return; }
+    if (arrow){ e.preventDefault(); navFocus(mo, arrow); return; }
+    if (e.key === 'Escape'){ e.preventDefault(); pickNth(L, L.length - 1); }
+    return;
+  }
+  // 3) 전투
+  if (typeof BT !== 'undefined' && BT && !$('scrBattle').classList.contains('hidden') && $('msg').classList.contains('hidden') && !typing){
+    const pn = $('cmdPanel');
+    if (!pn.classList.contains('hidden')){
+      if (digit >= 0){ e.preventDefault(); pickNth(visBtns(pn, '[data-k]'), digit); return; }
+      if (e.key === 'Escape' || e.key === 'Backspace'){ e.preventDefault(); $('ppBack').click(); return; }
+      if (arrow){ e.preventDefault(); navFocus(pn, arrow); } return;
+    }
+    if (BT.busy) return;
+    if (digit >= 0){ e.preventDefault(); pickNth([...$('skills').querySelectorAll('.skill')], digit); return; }
+    const cmd = {q:'cSurvey', w:'cQuiz', e:'cItem', r:'cRun'}[e.key.toLowerCase()];
+    if (cmd){ e.preventDefault(); $(cmd).click(); return; }
+    if (arrow){ e.preventDefault(); navFocus(document.querySelector('.bscr .cmd'), arrow); }
+    return;
+  }
+  // 4) 월드: M 또는 Esc로 메뉴
+  if (!$('scrWorld').classList.contains('hidden') && $('msg').classList.contains('hidden') && !typing && (e.key === 'm' || e.key === 'M')){ e.preventDefault(); openMenu('status'); }
+});
+
 function bfs(tx, ty){
   const key = (x,y) => x+','+y, prev = new Map([[key(P.x,P.y), null]]), q = [[P.x,P.y]];
   while (q.length){ const [x,y] = q.shift(); if (x === tx && y === ty) break;
@@ -1968,8 +2019,7 @@ function startBattle(id, opts){
   const stars = q ? q.stars : 0;
   const bud0 = Math.round(maxBud()*D.bud) + (stars === 1 ? 3 : stars === 3 ? -2 : 0);
   const tgt = (B.pct || B.won) ? B.target : +(B.target*(1 + D.tgt)).toFixed(2);
-  $('calc').open = !!(P && P.calcOpen);
-  $('calc').ontoggle = () => { if (P){ P.calcOpen = $('calc').open; } };
+
   document.querySelector('.sbars').appendChild($('msg'));
   BT = {id, B, st, v0: B.fs(st), budget: bud0, bud0, turn:0, maxTurns: Math.max(4, B.maxTurns - (stars === 3 ? 1 : 0) + D.turn), tgt, col:0, colMax:D.col, secret:!!opts.secret,
         used:new Set(), surveyed:false, insight:0, busy:false, sprite: opts.secret ? secretSprite() : bossSprite(id), fx:{shake:0, rain:0, flash:0, hit:0}, frame:0,
@@ -2015,25 +2065,25 @@ function renderBattleUI(){
   if ((APPROVE[BT.id] || []).length){ const miss = approvalMissing(); fc += `<br>🧾 Design approval needs: <b style="color:${miss.length ? 'var(--hp)' : 'var(--fs)'}">${(APPROVE[BT.id]).map(id => svName(id) + (BT.sv.has(id) ? ' ✓' : '')).join(', ')}</b>${miss.length ? ' (not done)' : ''}`; }
   $('forecast').innerHTML = fc;
   $('params').innerHTML = B.params.map(p => { const hid = p.h && !revealed(p.k); return `<dt>${p.l}</dt><dd class="${hid?'q':''}">${hid ? '? (needs investigation)' : paramVal(p, B, st) + (p.u ? ' ' + p.u : '')}</dd>`; }).join('');
-  if (!BT.panel) $('skills').innerHTML = B.skills.map(sk => {
+  if (!BT.panel) $('skills').innerHTML = B.skills.map((sk, si) => {
     const cost = costOf(sk), done = sk.once && BT.used.has(sk.id), lock = sk.req && !owns(sk.req), dis = BT.busy || cost > BT.budget || done || lock;
     let pv = '';
     if (!previewOK(sk) && !done) pv = `<span class="pv" style="color:var(--dim)">🔍 Effect ? · needs: ${needOf(sk).map(x => svList().find(v => v.id === x).name).join(', ')}</span>`;
     if (previewOK(sk) && !done){ const c = structuredClone(st); sk.apply(c, skillMul(sk));
       const isC = BT.id === 'consol', a0 = isC ? B.project(st) : v, nv = isC ? B.project(c) : metricOf(c), d = nv - a0;
       pv = `<span class="pv" style="color:var(--mp)">📐 ${diffState(st, c).join(', ') || 'No change'}</span>`;
-      if (isC) pv += `<span class="pv" style="color:${d > 0.004 ? 'var(--fs)' : d < -0.004 ? 'var(--hp)' : 'var(--dim)'}">${isC ? 'Expected readiness at opening' : 'Expected ' + B.label}: ${fmtV(a0)} → ${fmtV(nv)}</span>`;
+      pv += `<span class="pv" style="color:${d > 0.004 ? 'var(--fs)' : d < -0.004 ? 'var(--hp)' : 'var(--dim)'}">${isC ? 'Expected readiness at opening' : 'Expected ' + B.label}: ${fmtV(a0)} → ${fmtV(nv)}</span>`;
       if (BT.id === 'consol' && sk.id === 'pre'){ const tot = c.load + c.pre; if (tot > 103) pv += `<span class="pv" style="color:var(--hp)">⚠ Total fill load ${tot} kPa: exceeds bearing!</span>`; }
       if (BT.id === 'tunnel' && sk.id === 'epb' && c.sT > 0.8*B.sv(c)) pv += `<span class="pv" style="color:var(--hp)">⚠ Face pressure ${c.sT} kPa: blow-out risk!</span>`;
       if (BT.id === 'tunnel' && sk.id === 'dew' && c.set > 6) pv += `<span class="pv" style="color:var(--hp)">⚠ Surface settlement ${c.set.toFixed(1)} cm: complaints!</span>`; }
     if (done) pv = `<span class="pv" style="color:var(--dim)">Built</span>`;
     if (lock) pv = `<span class="pv" style="color:var(--gold)">🔒 Requires: ${itemName(sk.req)} (shop)</span>`;
     const m = effMul(sk.tag);
-    return `<button class="skill" data-id="${sk.id}" ${dis?'disabled':''}><span class="sn">${sk.name}<span class="tag">${TAGN[sk.tag]}${m > 1.001 ? ' ×' + m.toFixed(2) : ''}</span></span><span class="sc"${sk.trap ? ' style="color:var(--gold)"' : ''}>${sk.trap ? '+' + sk.gain + ' M$' : cost + ' M$' + (cost < sk.cost ? '↓' : '')}</span><span class="sd">${sk.desc}</span>${pv}</button>`;
+    return `<button class="skill" data-id="${sk.id}" ${si < 9 ? `data-key="${si+1}"` : ''} ${dis?'disabled':''}><span class="sn">${sk.name}<span class="tag">${TAGN[sk.tag]}${m > 1.001 ? ' ×' + m.toFixed(2) : ''}</span></span><span class="sc"${sk.trap ? ' style="color:var(--gold)"' : ''}>${sk.trap ? '+' + sk.gain + ' M$' : cost + ' M$' + (cost < sk.cost ? '↓' : '')}</span><span class="sd">${sk.desc}</span>${pv}</button>`;
   }).join('');
   $('skills').querySelectorAll('.skill').forEach(b => b.onclick = () => useSkill(b.dataset.id));
   const ins = []; if (BT.insight) ins.push(`✦ Insight: next method ×${BT.insight}`); if (BT.x2) ins.push('✦ Precise Analysis: next method ×2'); if (BT.extra) ins.push('✦ Crash Work: one more method this turn');
-  renderCalc(); $('predTog').checked = P.pred !== false; $('predTog').onchange = e => { P.pred = e.target.checked; save(); renderCalc(); };
+  renderCalc();
   $('insight').innerHTML = ins.join('<br>'); $('insight').classList.toggle('hidden', !ins.length);
   const left = svList().filter(v => !BT.sv.has(v.id));
   $('cSurvey').disabled = BT.busy || !left.length || !left.some(v => svCost(v) <= BT.budget); $('cSurvey').textContent = left.length ? `Investigate (${BT.sv.size}/${svList().length})` : 'Investigated';
@@ -2048,7 +2098,6 @@ async function useSkill(id){
   if (BT.busy) return; const sk = BT.B.skills.find(s => s.id === id), cost = costOf(sk); if (!sk || cost > BT.budget || (sk.req && !owns(sk.req))) return;
   BT.busy = true; renderBattleUI();
   let pr = {pred:null};
-  if (P.pred !== false && !BT.B.pct && previewOK(sk)){ pr = await predictModal(sk); if (!pr){ BT.busy = false; renderBattleUI(); return; } }
   const before = metricOf(BT.st), mult = skillMul(sk), bonus = mult > 1.001;
   sk.apply(BT.st, mult); BT.budget -= cost; if (sk.trap) BT.budget += sk.gain; BT.used.add(sk.id); if (!sk.trap){ BT.insight = 0; BT.x2 = false; }
   BT.fx.hit = 18; BT.fx.flash = 8;
@@ -2130,7 +2179,7 @@ function calcScore(){
   const B = BT.B, q = BT.quest;
   const base = q ? q.gold*2 : B.xp*5;
   const left = B.pct ? Math.max(0, (BT.st.dl - BT.st.t*12)/2) : Math.max(0, BT.maxTurns - BT.turn);
-  const parts = [['Base score', base], ['Budget left ×15', BT.budget*15], ['Turns left ×25', Math.round(left*25)], ['No-damage bonus', BT.dmgTaken ? 0 : 200], ['Correct quizzes ×50', BT.quizRight*50], ['Accurate predictions ×40', (BT.predRight||0)*40]];
+  const parts = [['Base score', base], ['Budget left ×15', BT.budget*15], ['Turns left ×25', Math.round(left*25)], ['No-damage bonus', BT.dmgTaken ? 0 : 200], ['Correct quizzes ×50', BT.quizRight*50]];
   let tot = parts.reduce((a,b) => a + b[1], 0); const mul = +((q ? [1,1,1.5,2.2][q.stars] : 1) * ({easy:0.7, normal:1, hard:1.5}[P.diff] || 1)).toFixed(2);
   if (BT.practice) tot = Math.round(tot/4); else tot = Math.round(tot*mul);
   return {parts, mul, tot};
@@ -2529,7 +2578,7 @@ function fitBattle(){
   if (typeof BT === 'undefined' || !BT || innerWidth <= 860){ scv.style.height = ''; scv.style.aspectRatio = ''; scv.style.maxHeight = ''; const sb0 = document.querySelector('.bscr .sbars'); if (sb0) sb0.style.maxHeight = ''; return; }
   const hud = $('hud').offsetHeight || 0, cmd = document.querySelector('.bscr .bgrid').offsetHeight;
   const fld = document.querySelector('.bscr .field'), cal = $('calc');
-  const fh = fld.offsetHeight - (cal.open ? cal.offsetHeight - (cal.querySelector('summary') ? cal.querySelector('summary').offsetHeight + 18 : 0) : 0);
+  const fh = fld.offsetHeight - (cal && cal.open ? cal.offsetHeight - (cal.querySelector('summary') ? cal.querySelector('summary').offsetHeight + 18 : 0) : 0);
   const avail = innerHeight - hud - Math.max(cmd, fh) - 12*2 - 36;
   const w = scv.getBoundingClientRect().width;
   const hgt = Math.round(Math.max(220, Math.min(avail, w/1.7)));

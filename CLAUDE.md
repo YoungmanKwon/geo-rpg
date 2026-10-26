@@ -9,7 +9,7 @@
 - `tools/gen_en.py` — 영어 버전 생성기. 사전에 없는 문장이 있으면 목록으로 알려 준다. 그 문장을 번역해 en_map.json에 추가하고 다시 실행한다.
 
 ## 수정 후 할 일
-1. `index.html` 수정
+1. `index.html` 수정 — 타이틀 화면의 버전(`id="gameVer"`, 예: `v2026.10.26`)을 수정한 날짜로 바꾼다
 2. `python tools/gen_en.py` 실행 → 번역 누락이 있으면 en_map.json에 추가 후 재실행
 3. 브라우저(또는 Playwright)로 열어 콘솔 오류가 없는지 확인
 4. 커밋하고 `main`에 푸시 → GitHub Pages가 1~2분 뒤 자동 반영
