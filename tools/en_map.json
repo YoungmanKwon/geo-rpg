@@ -2074,5 +2074,11 @@
 "건축 인허가를 변경해 층수를 줄인다. 기초 하중 −20% (1회)": "Amend the building permit to cut the storey count. Footing load −20% (once)",
 "교량 상하류 골재 채취를 금지하고 하상을 복원해 기초 근입을 되살린다 (근입깊이 +1 m, 1회)": "Ban aggregate mining near the bridge and restore the bed, giving back foundation depth (embedment +1 m, once)",
 "케이슨 뒤에 선반(relieving platform)을 달아 상재하중을 받친다. 배면 상재하중 q 절반 (1회)": "Add a relieving platform behind the caisson to carry the surcharge. Backfill surcharge q halved (once)",
-"전용 공법: ": "Exclusive methods: "
+"전용 공법: ": "Exclusive methods: ",
+"선행재하 +": "Preload +",
+"진공압 −40 kPa": "Vacuum −40 kPa",
+"성토 ": "Embankment ",
+"연약 점토 ": "Soft clay ",
+" m 간격": " m spacing",
+"⚠ 샌드매트가 없어 PVD 물이 빠질 길이 없다": "⚠ No sand mat: PVD water has nowhere to drain"
 }

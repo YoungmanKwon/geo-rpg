@@ -285,7 +285,7 @@ button:focus-visible,summary:focus-visible,.inp:focus-visible{outline:3px solid 
     <div class="row" style="margin-top:14px"><input id="inCode" maxlength="16" placeholder="저장 코드" autocomplete="off" style="width:150px"><button class="btn sm" id="btnCode">코드로 이어하기</button></div>
     <p class="note" id="cloudNote" style="margin-top:10px"></p>
     <div class="row" style="margin-top:12px"><a class="langsw" href="./en/">🌐 English</a></div>
-    <div class="ver" id="gameVer">v2026.10.26</div>
+    <div class="ver" id="gameVer">v2026.10.30</div>
   </section>
 
   <section id="scrWorld" class="hidden">
@@ -2675,7 +2675,25 @@ function drawField(){
     T('검토 깊이 6 m', 6, top + 6*sc + 4, RED); T(revealed('N') ? `N = ${st.N.toFixed(0)}` : 'N = ?', 6, top + 14); break; }
   case 'consol': {
     BT.hero = [0.015, 0.99];
-    const L = 46, R = 12, Tp = 14, Bm = 26, pw = w - L - R, ph = h - Tp - Bm, sMax = 1.4;
+    // 위: 단면도 (성토 · 샌드매트 · PVD · 선행재하 · 진공압), 아래: 침하-시간 곡선
+    const hs = Math.round(h*0.44), cx0 = w*0.2, cx1 = w*0.8, top0 = hs*0.42, base = hs - 4, sink = Math.min(st.S, 1.4)/1.4*hs*0.28;
+    const gy = top0 + sink, eh = st.load/60*hs*0.2, ph0 = st.pre/60*hs*0.2, slope = eh + ph0 + 6;
+    c.fillStyle = CLAY; c.beginPath(); c.moveTo(0, top0); c.lineTo(cx0 - slope, top0); c.quadraticCurveTo(cx0, gy, cx0 + slope, gy); c.lineTo(cx1 - slope, gy); c.quadraticCurveTo(cx1, gy, cx1 + slope, top0); c.lineTo(w, top0); c.lineTo(w, base); c.lineTo(0, base); c.fill();
+    c.fillStyle = SAND; c.fillRect(0, base, w, hs - base);
+    if (st.vac){ c.fillStyle = 'rgba(74,163,255,.18)'; c.fillRect(cx0, gy, cx1 - cx0, base - gy); }
+    if (st.pvd){ const sp = st.pvd <= 1.2 ? 7 : 12; c.strokeStyle = 'rgba(233,238,247,.75)'; c.lineWidth = 1; c.beginPath(); for (let x = cx0 + 6; x < cx1 - 4; x += sp){ c.moveTo(x, gy); c.lineTo(x, base); } c.stroke(); }
+    if (st.mat){ c.fillStyle = '#e8d29a'; c.fillRect(cx0 - 8, gy - 4, cx1 - cx0 + 16, 4); }
+    const ey = gy - (st.mat ? 4 : 0);
+    c.fillStyle = '#a07d4f'; c.beginPath(); c.moveTo(cx0 - 10, ey); c.lineTo(cx0 + eh, ey - eh); c.lineTo(cx1 - eh, ey - eh); c.lineTo(cx1 + 10, ey); c.fill();
+    if (st.pre){ c.fillStyle = '#c99b5f'; c.beginPath(); c.moveTo(cx0 + eh, ey - eh); c.lineTo(cx0 + eh + ph0, ey - eh - ph0); c.lineTo(cx1 - eh - ph0, ey - eh - ph0); c.lineTo(cx1 - eh, ey - eh); c.fill(); T(`선행재하 +${st.pre} kPa`, w/2, ey - eh - ph0 - 3, '#f2c14e', 'center'); }
+    if (st.vac){ c.strokeStyle = BLUE; c.lineWidth = 2; c.setLineDash([4,3]); c.beginPath(); c.moveTo(cx0 - 8, ey + 1); c.lineTo(cx1 + 8, ey + 1); c.stroke(); c.setLineDash([]);
+      for (let i=0;i<3;i++) arrow(cx0 + (cx1-cx0)*(0.25 + 0.25*i), gy + 6, cx0 + (cx1-cx0)*(0.25 + 0.25*i), gy + 18, BLUE, 1.5); T('진공압 −40 kPa', 6, top0 + 14, BLUE); }
+    if (sink > 1){ c.strokeStyle = DIM; c.lineWidth = 1; c.setLineDash([3,3]); c.beginPath(); c.moveTo(cx0, top0); c.lineTo(cx1, top0); c.stroke(); c.setLineDash([]); }
+    T(`성토 ${st.load} kPa`, w/2, ey - eh/2 + 4, LINE, 'center'); T(`연약 점토 ${st.H} m`, 6, base - 5, LINE);
+    const lb = []; if (st.mat) lb.push('샌드매트'); if (st.pvd) lb.push(`PVD ${st.pvd} m 간격`); if (lb.length) T(lb.join(' · '), w/2, base - 5, '#f2c14e', 'center');
+    if (st.pvd && !st.mat) T('⚠ 샌드매트가 없어 PVD 물이 빠질 길이 없다', 6, 12, RED);
+    c.lineWidth = 1.5;
+    const L = 46, R = 12, Tp = hs + 12, Bm = 26, pw = w - L - R, ph = h - Tp - Bm, sMax = 1.4;
     const X = m => L + m/12*pw, Y = s => Tp + s/sMax*ph;
     c.strokeStyle = '#3a4566';
     for (let m=0;m<=12;m+=2){ c.beginPath(); c.moveTo(X(m),Tp); c.lineTo(X(m),Tp+ph); c.stroke(); if (m < 12) T(m + '', X(m) - 4, h - 10, DIM); }
@@ -2686,8 +2704,7 @@ function drawField(){
     T(revealed('req') ? `필요 침하 ${req.toFixed(2)} m` : '필요 침하 ?', L + 6, Y(req) - 5, '#f2c14e'); T('개통일', X(st.dl) + 4, Tp + 12, RED);
     c.strokeStyle = '#3CCF91'; c.lineWidth = 2.5; c.beginPath(); st.hist.forEach(([m,s],i) => i ? c.lineTo(X(m),Y(s)) : c.moveTo(X(m),Y(s))); c.stroke();
     const lst = st.hist[st.hist.length-1]; c.fillStyle = '#3CCF91'; c.beginPath(); c.arc(X(lst[0]), Y(lst[1]), 4, 0, 7); c.fill();
-    const tags = []; if (st.mat) tags.push('샌드매트'); if (st.pvd) tags.push(`PVD ${st.pvd} m`); if (st.pre) tags.push(`선행재하 ${st.pre}`); if (st.vac) tags.push('진공압'); const tg = tags.join(' · ') || '대책 없음';
-    T(tg, L + pw - c.measureText(tg).width, Tp + ph - 6, DIM); T('침하량 (m, 아래로)', L + 6, Tp + ph - 6); break; }
+    T('침하량 (m, 아래로)', L + 6, Tp + ph - 6); break; }
   case 'found': {
     BT.hero = [0.1, 0.32];
     const gy = h*0.32, sc = Math.min(w/10, h/6.5), cx = w*0.45, Bw = st.B*sc, Df = st.Df*sc;
